@@ -56,7 +56,7 @@ except ImportError:
     _WEBENGINE_OK = False
 
 from PyQt6.QtCore import (
-    Qt, QUrl, pyqtSignal, QCoreApplication, QTimer,
+    Qt, QUrl, pyqtSignal, pyqtSlot, QCoreApplication, QTimer,
 )
 from PyQt6.QtGui import (
     QColor, QPalette, QSurfaceFormat, QIcon,
@@ -362,8 +362,9 @@ class UltronWebWindow(QMainWindow):
             self._last_reload_time = now
 #            self._web.reload() # Temporarily disabled to debug blinking issue
 
+    @pyqtSlot(str)
     def _eval_js(self, js_code: str):
-        if _WEBENGINE_OK and hasattr(self, "_web") and self._web.page():
+        if _WEBENGINE_OK and hasattr(self, "_web") and self._web and self._web.page():
             try:
                 self._web.page().runJavaScript(js_code)
             except Exception as e:

@@ -1689,7 +1689,7 @@ window.setUltronTheme=(themeName)=>{
   window.dispatchEvent(new CustomEvent('ultron-theme-change',{detail:{theme:themeName}}));
 };
 
-function speakUltronText(text){
+window.speakUltronText = function(text){
   if(!('speechSynthesis' in window) || !text) return;
   try {
     window.speechSynthesis.cancel();
@@ -1698,15 +1698,15 @@ function speakUltronText(text){
     u.pitch = 0.9;
     window.speechSynthesis.speak(u);
   } catch(e){ console.warn('SpeechSynthesis error:', e); }
-}
+};
 
-function stopUltronSpeech(){
+window.stopUltronSpeech = function(){
   if('speechSynthesis' in window){
     try { window.speechSynthesis.cancel(); } catch(e){}
   }
   sendBackendCommand('/stop_speech');
   showToast('TTS SYSTEM', 'Speech output stopped.');
-}
+};
 
 function speakUltronEmergency(text){
   if(!('speechSynthesis'in window))return;
