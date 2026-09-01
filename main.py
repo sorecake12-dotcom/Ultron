@@ -1765,59 +1765,68 @@ class UltronLive:
     async def _play_audio(self):
         print("[ULTRON] [Play] Audio playback loop started.")
 
-        stream = sd.RawOutputStream(
-            samplerate=RECEIVE_SAMPLE_RATE,
-            channels=CHANNELS,
-            dtype="int16",
-            blocksize=CHUNK_SIZE,
-        )
-        self._out_stream = stream
-        stream.start()
-
-        try:
-            while True:
-                try:
-                    chunk = await asyncio.wait_for(
-                        self.audio_in_queue.get(),
-                        timeout=0.02
-                    )
-                except asyncio.TimeoutError:
-                    if (
-                        self._turn_done_event
-                        and self._turn_done_event.is_set()
-                        and self.audio_in_queue.empty()
-                    ):
-                        self.set_speaking(False, 0.0)
-                        self._turn_done_event.clear()
-                    continue
-
-                # Calculate real-time RMS audio amplitude from 16-bit PCM chunk
-                amp = 0.0
-                try:
-                    import numpy as np
-                    arr = np.frombuffer(chunk, dtype=np.int16)
-                    if len(arr) > 0:
-                        rms = float(np.sqrt(np.mean(arr.astype(np.float32) ** 2)))
-                        amp = min(rms / 10000.0, 1.0)
-                except Exception:
-                    pass
-
-                self.set_speaking(True, amp)
-                try:
-                    await asyncio.to_thread(stream.write, chunk)
-                except (RuntimeError, asyncio.CancelledError):
-                    break   # executor shutting down — exit cleanly
-        except Exception as e:
-            print(f"[ULTRON] [Play Warning]: {e}. Continuing without audio output.")
-            while True:
-                await asyncio.sleep(1.0)
-        finally:
-            self.set_speaking(False, 0.0)
+        while True:
+            stream = None
             try:
-                stream.stop()
-                stream.close()
-            except Exception:
-                pass
+                stream = sd.RawOutputStream(
+                    samplerate=RECEIVE_SAMPLE_RATE,
+                    channels=CHANNELS,
+                    dtype="int16",
+                    blocksize=CHUNK_SIZE,
+                )
+                self._out_stream = stream
+                stream.start()
+
+                while True:
+                    try:
+                        chunk = await asyncio.wait_for(
+                            self.audio_in_queue.get(),
+                            timeout=0.02
+                        )
+                    except asyncio.TimeoutError:
+                        if (
+                            self._turn_done_event
+                            and self._turn_done_event.is_set()
+                            and self.audio_in_queue.empty()
+                        ):
+                            self.set_speaking(False, 0.0)
+                            self._turn_done_event.clear()
+                        continue
+
+                    # Calculate real-time RMS audio amplitude from 16-bit PCM chunk
+                    amp = 0.0
+                    try:
+                        import numpy as np
+                        arr = np.frombuffer(chunk, dtype=np.int16)
+                        if len(arr) > 0:
+                            rms = float(np.sqrt(np.mean(arr.astype(np.float32) ** 2)))
+                            amp = min(rms / 10000.0, 1.0)
+                    except Exception:
+                        pass
+
+                    self.set_speaking(True, amp)
+                    try:
+                        await asyncio.to_thread(stream.write, chunk)
+                    except (RuntimeError, asyncio.CancelledError):
+                        return   # executor shutting down — exit cleanly
+                    except Exception as ex:
+                        print(f"[ULTRON] [Play Warning]: {ex}. Auto-recovering audio output stream...")
+                        break   # Break inner loop to recreate stream
+
+            except (RuntimeError, asyncio.CancelledError):
+                return
+            except Exception as e:
+                print(f"[ULTRON] [Play Error]: {e}. Retrying audio stream in 1s...")
+                await asyncio.sleep(1.0)
+            finally:
+                self.set_speaking(False, 0.0)
+                if stream:
+                    try:
+                        stream.stop()
+                        stream.close()
+                    except Exception:
+                        pass
+                self._out_stream = None
 
     # ── Morning briefing ────────────────────────────────────────────────────────
 
