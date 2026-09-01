@@ -1062,6 +1062,7 @@ class UltronLive:
         if not text:
             return
         clean_text = str(text).strip()
+        self.ui.write_log(f"[PC] You: {clean_text}")
 
         if self._handle_system_or_app_commands(clean_text):
             return
