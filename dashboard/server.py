@@ -877,7 +877,7 @@ class DashboardServer:
             await websocket.accept()
             self._clients.add(websocket)
             _log_remote_step(6, "WebSocket Handshake", "OK", f"Connected Client IP: {client_ip}")
-            for entry in self._history[-50:]:
+            for entry in list(self._history)[-50:]:
                 try:
                     await websocket.send_json(entry)
                 except Exception:
@@ -905,7 +905,7 @@ class DashboardServer:
                             })
                             if self._wake_callback:
                                 self._wake_callback()
-            except WebSocketDisconnect:
+            except (WebSocketDisconnect, asyncio.CancelledError, Exception):
                 _log_remote_step(11, "Session Revocation / Disconnect", "OK", f"WebSocket disconnected ({client_ip})")
             finally:
                 self._clients.discard(websocket)
