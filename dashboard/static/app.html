@@ -2955,18 +2955,29 @@ try{
 
   const reactor=new THREE.Group();reactor.position.y=.05;scene.add(reactor);
 
-  // Soft subtle beam
-  const beam=new THREE.Mesh(new THREE.CylinderGeometry(.9,1.7,5.5,36,1,true),add(mHex,.006));
-  reactor.add(beam);
+  // Backside red cylinder (beam) removed as requested
+  const beam=new THREE.Group(); // Dummy object for theme compatibility
 
   const core=new THREE.Group();reactor.add(core);
   core.add(new THREE.Mesh(new THREE.SphereGeometry(.20,32,20),add(0xffd5da,.35)));
   const coreWire=new THREE.Mesh(new THREE.SphereGeometry(.42,32,20),new THREE.MeshBasicMaterial({color:mHex,wireframe:true,transparent:true,opacity:.15,blending:THREE.AdditiveBlending,depthWrite:false}));
   core.add(coreWire);
 
-  // Lining rings and tick lines removed for clean core blob & ULTRON text display
+  // Iconic orbital logo rings
   const rings=[];
+  [[.92,.015,0],[1.22,.012,.65],[1.55,.014,1.52],[1.92,.010,2.1],[2.25,.015,.35]].forEach(([r,tube,ang],i)=>{
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(r,tube,8,128),add(i===0?0xffffff:mHex,i===0?.65:.45));
+    ring.rotation.set(ang,ang*.55,ang*.28);reactor.add(ring);
+    rings.push({ring,dir:i%2?1:-1,spd:.004+i*.0012});
+  });
+
   const ticks=new THREE.Group();
+  for(let i=0;i<60;i++){
+    const a=i/60*Math.PI*2,maj=i%5===0,R=2.50,L=maj?.18:.08;
+    const geo=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(Math.cos(a)*R,Math.sin(a)*R,0),new THREE.Vector3(Math.cos(a)*(R+L),Math.sin(a)*(R+L),0)]);
+    ticks.add(new THREE.Line(geo,new THREE.LineBasicMaterial({color:hot,transparent:true,opacity:maj?.45:.12,blending:THREE.AdditiveBlending})));
+  }
+  reactor.add(ticks);
 
 
   // Subtle ambient micro-particle field (Replaces heavy floating shapes)
@@ -3015,7 +3026,7 @@ try{
   addEventListener('ultron-theme-change',e=>{
     const map={ultron:0xff1a2e,jarvis:0x00e5ff,violet:0xbd00ff,emerald:0x00ff66,gold:0xffaa00};
     const hex=map[e.detail?.theme]||0xff1a2e;
-    beam.material.color.setHex(hex);coreWire.material.color.setHex(hex);
+    if(beam.material) beam.material.color.setHex(hex);coreWire.material.color.setHex(hex);
     rings.forEach(({ring},i)=>ring.material.color.setHex(i===0?0xffffff:hex));
     pMat.color.setHex(hex);
     gridHelper.material.color.setHex(hex);
@@ -3053,7 +3064,7 @@ try{
     }
 
     coreWire.material.opacity = Math.min(0.9, 0.45 + audioGlow);
-    beam.material.opacity = Math.min(0.85, 0.25 + audioGlow * 0.8);
+    if(beam.material) beam.material.opacity = Math.min(0.85, 0.25 + audioGlow * 0.8);
 
     rings.forEach(({ring,dir,spd})=>{
       const speedMult = (currentState === 'SPEAKING' ? 1.0 + currentAmplitude * 0.8 : 1.0);

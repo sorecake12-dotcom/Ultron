@@ -498,21 +498,33 @@ class UltronUI:
         self._win.on_toggle_mute = cb
 
     def notify_phone_connected(self) -> None:
-        self._win._toast_sig.emit("PHONE CONNECTED", "Remote device paired")
+        try:
+            self._win._toast_sig.emit("PHONE CONNECTED", "Remote device paired")
+        except Exception:
+            pass
 
     def set_state(self, state: str):
-        self._win._state_sig.emit(state)
+        try:
+            self._win._state_sig.emit(state)
+        except Exception:
+            pass
 
     def write_log(self, text: str):
-        self._win._log_sig.emit(text)
+        try:
+            self._win._log_sig.emit(text)
+        except Exception:
+            pass
 
     def update_telemetry(self, data: dict):
         now = time.time()
         if now - getattr(self, "_last_telemetry_time", 0.0) < 2.0:
             return
         self._last_telemetry_time = now
-        escaped = json.dumps(data)
-        self._win._telemetry_sig.emit(escaped)
+        try:
+            escaped = json.dumps(data)
+            self._win._telemetry_sig.emit(escaped)
+        except Exception:
+            pass
 
     def _eval_js(self, js_code: str):
         """Thread-safe: evaluate JavaScript code in the WebEngine view."""
