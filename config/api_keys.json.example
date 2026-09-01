@@ -1,0 +1,9 @@
+{
+    "gemini_api_key": "YOUR_GEMINI_API_KEY_HERE",
+    "os_system": "windows",
+    "morning_brief_enabled": true,
+    "assistant_name": "ULTRON",
+    "user_name": "Sir",
+    "ui_color": "#ff1a2e",
+    "camera_index": 0
+}

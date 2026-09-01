@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FF1E38" stop-opacity="0.3"/>
+      <stop offset="80%" stop-color="#0F0608" stop-opacity="1"/>
+      <stop offset="100%" stop-color="#050508" stop-opacity="1"/>
+    </radialGradient>
+    
+    <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="1"/>
+      <stop offset="25%" stop-color="#FF4D5E" stop-opacity="1"/>
+      <stop offset="70%" stop-color="#D6001C" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#8B0000" stop-opacity="0"/>
+    </radialGradient>
+
+    <linearGradient id="uGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FF334B"/>
+      <stop offset="50%" stop-color="#E6001F"/>
+      <stop offset="100%" stop-color="#990012"/>
+    </linearGradient>
+
+    <filter id="glowFilter" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Dark Obsidian Base Circle -->
+  <circle cx="256" cy="256" r="236" fill="url(#bgGlow)" stroke="#FF1E38" stroke-width="6" />
+  <circle cx="256" cy="256" r="226" fill="none" stroke="#660A14" stroke-width="3" stroke-dasharray="12 6" />
+
+  <!-- Outer Tech Ring -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="#FF263D" stroke-width="4" stroke-opacity="0.75" />
+
+  <!-- HUD Ticks -->
+  <g stroke="#FF334B" stroke-width="4" opacity="0.85">
+    <line x1="256" y1="20" x2="256" y2="40" />
+    <line x1="256" y1="472" x2="256" y2="492" />
+    <line x1="20" y1="256" x2="40" y2="256" />
+    <line x1="472" y1="256" x2="492" y2="256" />
+    <line x1="89" y1="89" x2="103" y2="103" />
+    <line x1="409" y1="89" x2="395" y2="103" />
+    <line x1="89" y1="423" x2="103" y2="409" />
+    <line x1="409" y1="423" x2="395" y2="409" />
+  </g>
+
+  <!-- Arc Segments -->
+  <path d="M 256 86 A 170 170 0 0 1 376 136" fill="none" stroke="#FF1E38" stroke-width="8" stroke-linecap="round" />
+  <path d="M 426 256 A 170 170 0 0 1 376 376" fill="none" stroke="#FF1E38" stroke-width="8" stroke-linecap="round" />
+  <path d="M 256 426 A 170 170 0 0 1 136 376" fill="none" stroke="#FF1E38" stroke-width="8" stroke-linecap="round" />
+  <path d="M 86 256 A 170 170 0 0 1 136 136" fill="none" stroke="#FF1E38" stroke-width="8" stroke-linecap="round" />
+
+  <!-- Inner HUD Ring -->
+  <circle cx="256" cy="256" r="140" fill="none" stroke="#B30018" stroke-width="3" stroke-dasharray="24 8" />
+
+  <!-- Side Wing Accents -->
+  <polygon points="120,220 160,180 160,280 135,310" fill="#CC001B" opacity="0.85" />
+  <polygon points="392,220 352,180 352,280 377,310" fill="#CC001B" opacity="0.85" />
+
+  <!-- Core Background Glow -->
+  <circle cx="256" cy="256" r="110" fill="url(#coreGlow)" filter="url(#glowFilter)" />
+
+  <!-- Stylized ULTRON Emblem 'U' -->
+  <path d="M 170 160 L 205 160 L 205 260 L 230 295 L 282 295 L 307 260 L 307 160 L 342 160 L 342 270 L 300 330 L 256 355 L 212 330 L 170 270 Z" 
+        fill="url(#uGradient)" stroke="#FFA3AD" stroke-width="4" filter="url(#glowFilter)" />
+
+  <!-- White Hot Center Core Eye -->
+  <circle cx="256" cy="245" r="28" fill="#FFFFFF" stroke="#FF1E38" stroke-width="6" filter="url(#glowFilter)" />
+</svg>

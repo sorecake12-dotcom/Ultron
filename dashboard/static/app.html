@@ -1,0 +1,3080 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ULTRON OS — Neural Command Interface</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════
+   THEME COLOR TOKENS
+═══════════════════════════════════════════════ */
+:root{
+  --a:#ff1a2e;--ah:#ff4d5a;--adim:rgba(255,26,46,.25);--aglo:rgba(255,26,46,.08);
+  --bg:#000000;--pbg:rgba(6,4,8,.97);--pbr:rgba(255,26,46,.24);--pbh:rgba(255,26,46,.55);
+  --tp:#ede0e4;--ts:#7a606a;--fh:'Orbitron',monospace;--fb:'Rajdhani',sans-serif
+}
+body.theme-jarvis {--a:#00e5ff;--ah:#5ceaff;--adim:rgba(0,229,255,.25);--aglo:rgba(0,229,255,.08);--pbr:rgba(0,229,255,.24);--pbh:rgba(0,229,255,.55);--ts:#3a8898}
+body.theme-violet {--a:#bd00ff;--ah:#d966ff;--adim:rgba(189,0,255,.25);--aglo:rgba(189,0,255,.08);--pbr:rgba(189,0,255,.24);--pbh:rgba(189,0,255,.55);--ts:#7a4898}
+body.theme-emerald{--a:#00ff66;--ah:#66ff99;--adim:rgba(0,255,102,.25);--aglo:rgba(0,255,102,.08);--pbr:rgba(0,255,102,.24);--pbh:rgba(0,255,102,.55);--ts:#2a7850}
+body.theme-gold   {--a:#ffaa00;--ah:#ffcc66;--adim:rgba(255,170,0,.25);--aglo:rgba(255,170,0,.08);--pbr:rgba(255,170,0,.24);--pbh:rgba(255,170,0,.55);--ts:#906030}
+
+/* ── Reset ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#000000;color:var(--tp);font-family:var(--fb);font-size:13px;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font-family:var(--fb)}
+
+/* ── WebGL Canvas Mount ── */
+#webgl{position:fixed;inset:0;z-index:0;background:#000000;contain:strict;transform:translateZ(0);isolation:isolate}
+#webgl canvas{display:block;width:100%;height:100%}
+
+/* ── Static Scanline Texture — Zero Flickering ── */
+.scan-tex{position:fixed;inset:0;z-index:1;pointer-events:none;transform:translateZ(0);contain:strict;
+  background:repeating-linear-gradient(0deg,rgba(255,26,46,.010) 0 1px,transparent 1px 3px)}
+
+/* ── Vignette ── */
+.vig{position:fixed;inset:0;z-index:2;pointer-events:none;transform:translateZ(0);contain:strict;
+  background:radial-gradient(ellipse at 50% 50%,transparent 24%,rgba(0,0,0,.80) 100%)}
+
+/* ── Alert Flash (Emergency only) ── */
+#alert{display:none;position:fixed;inset:0;z-index:16;pointer-events:none;
+  animation:alertFlash .5s ease-in-out infinite alternate}
+@keyframes alertFlash{from{background:rgba(255,0,20,.20)}to{background:rgba(255,0,20,.04)}}
+
+/* ── Emergency Top Banner ── */
+.emergency-top-banner{
+  display:none;position:fixed;top:0;left:0;right:0;height:28px;z-index:100;
+  background:linear-gradient(90deg,#500010,#ff001e,#500010);
+  color:#fff;font-family:var(--fh);font-size:8.5px;font-weight:700;
+  letter-spacing:.2em;text-align:center;line-height:28px;cursor:pointer;
+  box-shadow:0 0 24px rgba(255,0,30,.9)}
+body.emergency-active .emergency-top-banner{display:block}
+
+/* ══════════════════════════════════════════
+   BOOT SCREEN
+══════════════════════════════════════════ */
+#boot{position:fixed;inset:0;z-index:60;display:grid;place-content:center;text-align:center;
+  background:radial-gradient(circle,#160309,#030004 65%);
+  transition:opacity .4s ease,visibility .4s ease}
+#boot.hidden{opacity:0;visibility:hidden}
+.boot-logo{font-family:var(--fh);font-size:24px;font-weight:900;letter-spacing:.5em;padding-left:.5em;
+  color:var(--ah);text-shadow:0 0 26px var(--a),0 0 50px var(--adim)}
+#boot-log{margin:14px 0 10px;color:var(--ts);font-family:var(--fh);font-size:8px;letter-spacing:.2em}
+.boot-track{width:340px;max-width:72vw;height:1.5px;background:rgba(255,255,255,.05);margin:0 auto}
+#boot-fill{height:100%;width:0;background:var(--ah);box-shadow:0 0 10px var(--a);transition:width .12s linear}
+
+/* ══════════════════════════════════════════
+   MAIN LAYOUT (3 Columns × 3 Rows)
+══════════════════════════════════════════ */
+#app{
+  position:relative;z-index:3;
+  width:100%;height:100%;
+  display:grid;
+  grid-template-columns:23vw 1fr 26vw;
+  grid-template-rows:52px 1fr 64px;
+  pointer-events:none;
+  transform:translateZ(0);
+  contain:layout style;
+}
+.top-bar,.left-col,.center-col,.right-col,.bottom-dock,
+.panel,.chat-panel,.modal,.voice-zone{pointer-events:auto;transform:translateZ(0);backface-visibility:hidden}
+
+/* ══════════════════════════════════════════
+   TOP BAR — Reference Match
+══════════════════════════════════════════ */
+.top-bar{
+  grid-column:1/-1;grid-row:1;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;gap:12px;
+  background:rgba(5,2,8,.97);
+  border-bottom:1px solid var(--pbr);
+  position:relative}
+.top-bar::after{
+  content:'';position:absolute;bottom:-1px;left:30%;right:30%;height:1px;
+  background:linear-gradient(90deg,transparent,var(--a),transparent)}
+
+.brand-grp{display:flex;align-items:center;gap:9px;white-space:nowrap}
+.brand-hex{
+  width:26px;height:26px;border:1.5px solid var(--a);border-radius:3px;
+  display:grid;place-items:center;background:var(--aglo);
+  box-shadow:0 0 8px var(--adim),inset 0 0 5px var(--aglo)}
+.brand-hex svg{width:12px;height:12px;fill:var(--ah)}
+.brand-name{font-family:var(--fh);font-size:11px;font-weight:700;letter-spacing:.22em;color:var(--ah)}
+.top-vsep{width:1px;height:16px;background:var(--pbr)}
+.brand-stat{display:flex;align-items:center;gap:5px;font-family:var(--fh);font-size:8.5px;letter-spacing:.13em;color:var(--ts)}
+.stat-dot{width:6px;height:6px;border-radius:50%;background:var(--a);box-shadow:0 0 6px var(--a);animation:dotPulse 2s ease-in-out infinite}
+@keyframes dotPulse{0%,100%{opacity:1}50%{opacity:.3}}
+#sys-status-badge{color:var(--ts);font-size:8.5px;letter-spacing:.12em}
+
+.top-tele{
+  display:flex;align-items:center;gap:0;
+  font-family:var(--fh);font-size:8.5px;letter-spacing:.14em;color:var(--ts)}
+.top-tele strong{color:var(--tp);font-weight:500}
+.tele-bar{font-family:var(--fh);font-size:11px;color:var(--pbr);padding:0 12px;line-height:1}
+
+.top-actions{display:flex;gap:6px;align-items:center}
+#theme-select-box{
+  background:rgba(5,2,8,.9);border:1px solid var(--pbr);color:var(--tp);
+  padding:4px 8px;font-family:var(--fb);font-size:10.5px;letter-spacing:.06em;
+  outline:none;cursor:pointer;border-radius:2px;transition:border-color .2s}
+#theme-select-box:hover{border-color:var(--pbh)}
+#theme-select-box option{background:#0c0410}
+
+/* ══════════════════════════════════════════
+   BUTTONS
+══════════════════════════════════════════ */
+.btn{
+  font-family:var(--fb);font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;
+  padding:5px 11px;border:1px solid var(--pbr);background:rgba(5,2,8,.85);color:var(--ts);
+  cursor:pointer;border-radius:2px;white-space:nowrap;transition:border-color .18s ease, background-color .18s ease;
+  position:relative;transform:translateZ(0)}
+.btn:hover{color:var(--tp);border-color:var(--a);box-shadow:0 0 9px var(--adim);transform:translateY(-1px) translateZ(0)}
+.btn:active{transform:scale(.97) translateZ(0)}
+.btn.rem-tab.active,.btn.rem-tab:hover{color:var(--ah);border-color:var(--a);background:var(--aglo)}
+
+#alert-btn{padding-right:16px;position:relative}
+#alert-btn::before{
+  content:'';position:absolute;top:7px;right:6px;
+  width:5px;height:5px;border-radius:50%;
+  background:var(--a);box-shadow:0 0 6px var(--a);animation:dotPulse 1.4s infinite}
+#alert-btn.btn-alert-active{background:rgba(255,0,30,.28);color:#fff;border-color:var(--a);
+  box-shadow:0 0 16px var(--adim);animation:abPulse .7s infinite alternate}
+@keyframes abPulse{from{box-shadow:0 0 8px var(--adim)}to{box-shadow:0 0 24px var(--a)}}
+
+/* ══════════════════════════════════════════
+   PANELS (Shared Style)
+══════════════════════════════════════════ */
+.panel{
+  background:var(--pbg);border:1px solid var(--pbr);
+  position:relative;overflow:hidden;padding:9px 11px;
+  transition:border-color .3s ease;transform:translateZ(0);contain:content}
+.panel::before{
+  content:'';position:absolute;top:0;left:0;
+  width:18px;height:12px;pointer-events:none;
+  border-left:1.5px solid var(--ah);border-top:1.5px solid var(--ah)}
+.panel-plus-tr{
+  position:absolute;top:5px;right:6px;pointer-events:none;
+  font-family:var(--fh);font-size:10px;color:var(--ah);line-height:1;opacity:.7}
+.panel::after{
+  content:'';position:absolute;bottom:0;right:0;pointer-events:none;
+  width:12px;height:9px;
+  border-right:1px solid var(--pbr);border-bottom:1px solid var(--pbr)}
+
+.panel-title{
+  font-family:var(--fh);font-size:8px;font-weight:700;
+  letter-spacing:.22em;text-transform:uppercase;color:var(--ah);margin-bottom:8px;pointer-events:none}
+
+/* ══════════════════════════════════════════
+   LEFT COLUMN (4 Cards Stacked)
+══════════════════════════════════════════ */
+.left-col{
+  grid-column:1;grid-row:2;
+  display:flex;flex-direction:column;gap:7px;
+  padding:8px 8px 8px 12px;min-height:0;overflow:hidden}
+
+/* 1. Cognitive Matrix Card */
+.mx-row{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center;margin-bottom:4px}
+.mx-lbl{font-family:var(--fh);font-size:7.5px;letter-spacing:.13em;color:var(--ts);text-transform:uppercase}
+.mx-val{font-family:var(--fh);font-size:8px;font-weight:700;color:var(--tp);letter-spacing:.1em}
+.prog{grid-column:1/-1;height:2px;background:rgba(255,255,255,.05);overflow:hidden}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--a),var(--ah));
+  box-shadow:0 0 5px var(--adim);transition:width .4s ease}
+
+/* 2. Tactical Calendar Card (Futuristic Cyberpunk Theme) */
+.cal-panel{
+  background:var(--pbg);border:1px solid var(--pbr);
+  position:relative;overflow:hidden;padding:8px 10px;
+  border-radius:2px;display:flex;flex-direction:column;gap:5px;
+  transform:translateZ(0);contain:content}
+
+.cal-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding-bottom:3px;border-bottom:1px solid rgba(255,26,46,.15)}
+.cal-title-grp{display:flex;align-items:center;gap:6px}
+.cal-month-lbl{
+  font-family:var(--fh);font-size:10px;font-weight:800;
+  letter-spacing:.2em;color:var(--ah);text-transform:uppercase}
+.cal-year-lbl{
+  font-family:var(--fh);font-size:9px;font-weight:600;
+  letter-spacing:.12em;color:var(--ts)}
+
+.cal-nav-btn{
+  background:rgba(255,26,46,.08);border:1px solid var(--pbr);
+  color:var(--ah);width:19px;height:19px;border-radius:2px;
+  cursor:pointer;display:grid;place-items:center;font-family:var(--fh);
+  font-size:9.5px;line-height:1;transition:background-color .18s ease, border-color .18s ease}
+.cal-nav-btn:hover{
+  background:var(--a);color:#fff;border-color:var(--ah);
+  box-shadow:0 0 10px var(--adim);transform:scale(1.08) translateZ(0)}
+
+.cal-weekdays{
+  display:grid;grid-template-columns:repeat(7,1fr);
+  text-align:center;font-family:var(--fh);font-size:7px;
+  font-weight:700;letter-spacing:.08em;color:var(--ts);
+  padding:2px 0;border-bottom:1px solid rgba(255,255,255,.03)}
+
+.cal-days-grid{
+  display:grid;grid-template-columns:repeat(7,1fr);gap:2px;
+  text-align:center;font-family:var(--fb);font-size:10.5px}
+
+.cal-day-cell{
+  height:20px;display:grid;place-items:center;
+  color:var(--tp);cursor:pointer;border-radius:2px;
+  border:1px solid transparent;transition:border-color .18s ease, background-color .18s ease;
+  position:relative}
+.cal-day-cell.empty{pointer-events:none;opacity:0}
+.cal-day-cell.other-month{color:rgba(255,255,255,.18);font-size:9.5px}
+.cal-day-cell:hover:not(.empty){
+  border-color:var(--a);background:rgba(255,26,46,.18);
+  color:#fff;transform:scale(1.15) translateZ(0);z-index:2;
+  box-shadow:0 0 10px var(--adim)}
+
+/* Glowing Today Highlight */
+.cal-day-cell.today{
+  background:var(--a);color:#fff;font-weight:700;
+  border-color:var(--ah);box-shadow:0 0 10px var(--a), inset 0 0 5px rgba(255,255,255,.4);
+  animation:todayGlow 2s ease-in-out infinite alternate}
+@keyframes todayGlow{
+  0%{box-shadow:0 0 7px var(--a), inset 0 0 3px rgba(255,255,255,.3)}
+  100%{box-shadow:0 0 15px var(--a), 0 0 7px var(--ah), inset 0 0 7px rgba(255,255,255,.6)}
+}
+
+/* 3. Hologram Status Card (Matching Screenshot) */
+.holo-row{display:flex;justify-content:space-between;align-items:center;
+  padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.holo-row:last-child{border-bottom:none}
+.holo-key{font-family:var(--fh);font-size:7.5px;letter-spacing:.11em;color:var(--ts);text-transform:uppercase}
+.holo-val{font-family:var(--fh);font-size:7.5px;font-weight:700;letter-spacing:.1em;color:var(--ah)}
+.holo-val.green{color:#30ff80}
+
+/* 4. Scanner HUD Panel (Futuristic Circular Radar Widget) */
+.scanner-panel{
+  background:var(--pbg);border:1px solid var(--pbr);
+  position:relative;overflow:hidden;padding:8px 10px;
+  border-radius:3px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  flex:1.2;min-height:135px;transform:translateZ(0);contain:content;
+}
+.scanner-container{
+  width:100%;max-width:130px;aspect-ratio:1/1;position:relative;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+}
+.scanner-svg{width:100%;height:100%;overflow:visible}
+.spin-cw-slow{transform-origin:100px 100px;animation:spinCw 24s linear infinite}
+.spin-ccw-med{transform-origin:100px 100px;animation:spinCcw 14s linear infinite}
+.spin-cw-fast{transform-origin:100px 100px;animation:spinCw 8s linear infinite}
+.spin-radar{transform-origin:100px 100px;animation:spinCw 3.5s linear infinite}
+@keyframes spinCw{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes spinCcw{from{transform:rotate(360deg)}to{transform:rotate(0deg)}}
+.radar-core-pulse{animation:rPulse 1.8s ease-in-out infinite alternate}
+@keyframes rPulse{from{opacity:.4;transform:scale(0.8);transform-origin:100px 100px}to{opacity:1;transform:scale(1.2);transform-origin:100px 100px}}
+.radar-ring-pulse{animation:rRingPulse 2.2s ease-out infinite}
+@keyframes rRingPulse{0%{opacity:1;transform:scale(0.5);transform-origin:100px 100px}100%{opacity:0;transform:scale(2.2);transform-origin:100px 100px}}
+
+.scanner-readout{
+  width:100%;display:flex;justify-content:space-between;margin-top:4px;
+  font-family:var(--fh);font-size:7.5px;letter-spacing:.12em;color:var(--ts);
+  pointer-events:none;
+}
+.scanner-readout .sc-val{color:var(--ah);font-weight:700}
+
+/* ══════════════════════════════════════════
+   CENTER COLUMN (Medium AI Core)
+══════════════════════════════════════════ */
+.center-col{
+  grid-column:2;grid-row:2;
+  position:relative;overflow:hidden;
+  display:flex;flex-direction:column;align-items:center;justify-content:center}
+
+/* Text Overlay — STATIC (NEVER ROTATES) */
+.core-overlay{
+  position:absolute;top:48%;left:50%;
+  transform:translate(-50%,-60%);
+  text-align:center;pointer-events:none;z-index:4;user-select:none}
+#core-header-title{
+  font-family:var(--fh);font-size:clamp(20px,2.8vw,38px);font-weight:900;
+  letter-spacing:.44em;padding-left:.44em;color:var(--tp);
+  text-shadow:0 0 20px #000,0 0 10px #000,0 0 16px var(--adim);line-height:1;transition:all .4s ease}
+#ai-state-disp{
+  font-family:var(--fh);font-size:8.5px;font-weight:600;
+  letter-spacing:.22em;color:var(--ah);margin-top:8px;
+  text-shadow:0 0 12px #000,0 0 6px var(--adim);transition:color .3s}
+@keyframes micPulse{0%,100%{box-shadow:0 0 10px var(--a),0 0 20px var(--adim)}50%{box-shadow:0 0 24px var(--a),0 0 46px var(--adim)}}
+
+/* ══════════════════════════════════════════
+   RIGHT COLUMN — ULTRON INTERACTION FEED TERMINAL
+══════════════════════════════════════════ */
+.right-col{
+  grid-column:3;grid-row:2;
+  display:flex;flex-direction:column;
+  padding:8px 12px 8px 6px;gap:8px;
+  min-height:0;overflow:hidden}
+
+/* Hologram Status Top Panel */
+.top-status-card{
+  background:var(--pbg);border:1px solid var(--pbr);
+  position:relative;padding:9px 11px;
+  border-radius:3px}
+.top-status-card::before{
+  content:'';position:absolute;top:0;left:0;
+  width:18px;height:12px;
+  border-left:1.5px solid var(--ah);border-top:1.5px solid var(--ah)}
+
+.status-bar-track{
+  height:4px;background:rgba(255,255,255,.08);margin-top:8px;
+  border-radius:2px;overflow:hidden;position:relative}
+.status-bar-fill{
+  height:100%;width:65%;background:linear-gradient(90deg,var(--a),var(--ah));
+  box-shadow:0 0 8px var(--a)}
+
+/* ULTRON Interaction Feed Terminal Panel (Fixed Height Layout) */
+.terminal-panel{
+  background:var(--pbg);border:1px solid var(--pbr);
+  position:relative;display:flex;flex-direction:column;
+  flex:1;height:100%;min-height:0;overflow:hidden;border-radius:3px;
+  box-shadow:0 0 30px rgba(0,0,0,.5),inset 0 0 15px rgba(255,26,46,.04);
+  contain:content}
+.terminal-panel::before{
+  content:'';position:absolute;top:0;left:0;
+  width:18px;height:12px;pointer-events:none;
+  border-left:1.5px solid var(--ah);border-top:1.5px solid var(--ah)}
+
+.terminal-header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 11px;border-bottom:1px solid var(--pbr);
+  background:rgba(0,0,0,.35);flex-shrink:0}
+.terminal-title{
+  font-family:var(--fh);font-size:8px;font-weight:700;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--ah)}
+
+/* Terminal Feed Scrollable List */
+#interaction-log-feed{
+  flex:1;min-height:0;overflow-y:auto;padding:10px 11px;
+  display:flex;flex-direction:column;gap:7px;
+  font-family:var(--fb);font-size:12px;line-height:1.45;
+  scrollbar-width:thin;scrollbar-color:var(--pbr) transparent}
+#interaction-log-feed::-webkit-scrollbar{width:4px}
+#interaction-log-feed::-webkit-scrollbar-thumb{background:var(--pbr);border-radius:2px}
+
+/* Distinct Message Cards for Feed */
+.feed-item{
+  padding:6px 9px;border-radius:3px;
+  background:rgba(255,255,255,.015);border:1px solid rgba(255,26,46,.08);
+  word-break:break-word;display:flex;flex-direction:column;gap:3px;
+  transition:border-color .15s ease, background-color .15s ease}
+.feed-item:hover{border-color:var(--pbr);background:rgba(255,26,46,.03)}
+.feed-header{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.feed-badge{
+  font-family:var(--fh);font-size:7.5px;font-weight:700;letter-spacing:.12em;
+  padding:1px 5px;border-radius:2px;text-transform:uppercase;line-height:1.2}
+.feed-badge.user{color:#fff;background:var(--a);box-shadow:0 0 6px var(--adim)}
+.feed-badge.ai{color:var(--ah);background:var(--aglo);border:1px solid var(--pbr)}
+.feed-badge.sys{color:#ffaa00;background:rgba(255,170,0,.1);border:1px solid rgba(255,170,0,.3)}
+.feed-badge.timing{color:#00e5ff;background:rgba(0,229,255,.1);border:1px solid rgba(0,229,255,.25)}
+
+.feed-ts{font-family:var(--fh);font-size:7.5px;color:var(--ts);letter-spacing:.08em}
+.feed-text{color:var(--tp);font-family:var(--fb);font-size:12px;line-height:1.4}
+.feed-text.mono{font-family:var(--fh);font-size:8.5px;letter-spacing:.04em;color:rgba(255,255,255,.85)}
+
+/* Thinking Indicator */
+.thinking-box{
+  display:none;align-items:center;gap:8px;padding:6px 11px;
+  background:rgba(255,26,46,.06);border-top:1px solid rgba(255,26,46,.15);
+  font-family:var(--fh);font-size:8.5px;letter-spacing:.15em;color:var(--ah);
+  flex-shrink:0}
+.thinking-box.active{display:flex}
+.thinking-dots{display:flex;gap:4px}
+.thinking-dots span{
+  width:5px;height:5px;border-radius:50%;background:var(--ah);
+  animation:tDot 1.2s ease-in-out infinite alternate}
+.thinking-dots span:nth-child(2){animation-delay:.2s}
+.thinking-dots span:nth-child(3){animation-delay:.4s}
+@keyframes tDot{from{opacity:.2;transform:scale(.7)}to{opacity:1;transform:scale(1.2)}}
+
+/* Terminal Input Row */
+.terminal-input-row{
+  display:flex;align-items:center;gap:6px;
+  padding:7px 9px;border-top:1px solid var(--pbr);
+  background:rgba(0,0,0,.4);flex-shrink:0}
+#chat-input-field{
+  flex:1;background:rgba(255,255,255,.03);
+  border:1px solid var(--pbr);color:var(--tp);
+  padding:6px 9px;font-family:var(--fb);font-size:12px;
+  outline:none;border-radius:2px;transition:border-color .2s;
+  resize:none;height:30px;max-height:80px;line-height:1.35;
+  contain:paint layout}
+#chat-input-field:focus{border-color:var(--pbh)}
+#chat-input-field::placeholder{color:var(--ts);font-size:11px}
+.ci-img-btn{
+  width:27px;height:27px;padding:0;flex-shrink:0;
+  border:1px solid var(--pbr);background:transparent;
+  color:var(--ts);cursor:pointer;font-size:13px;
+  display:grid;place-items:center;border-radius:2px;transition:all .18s}
+.ci-img-btn:hover{border-color:var(--pbh);color:var(--tp)}
+.ci-send-btn{
+  width:30px;height:30px;padding:0;flex-shrink:0;
+  border:1px solid var(--a);background:var(--aglo);
+  color:var(--ah);cursor:pointer;display:grid;place-items:center;
+  border-radius:2px;transition:all .18s}
+.ci-send-btn:hover{background:var(--adim);box-shadow:0 0 9px var(--adim)}
+
+/* ══════════════════════════════════════════
+   BOTTOM DOCK — Authentic Reference Center Alignment
+══════════════════════════════════════════ */
+.bottom-dock{
+  grid-column:1/-1;grid-row:3;
+  display:grid;
+  grid-template-columns:1fr auto 1fr;
+  align-items:center;
+  padding:0 20px;
+  background:rgba(5,2,8,.97);
+  border-top:1px solid var(--pbr);
+  position:relative}
+.bottom-dock::before{
+  content:'';position:absolute;top:0;left:60px;right:60px;height:1px;
+  background:linear-gradient(90deg,transparent,var(--pbr),var(--a),var(--pbr),transparent)}
+
+.dock-left-sec{display:flex;align-items:center;gap:8px;justify-content:flex-start}
+.dock-center-sec{display:flex;align-items:center;gap:12px;justify-content:center}
+.dock-right-sec{display:flex;align-items:center;gap:10px;justify-content:flex-end}
+
+.dock-btn{
+  display:flex;align-items:center;gap:6px;
+  font-family:var(--fb);font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  padding:6px 12px;border:1px solid var(--pbr);background:rgba(5,2,8,.8);color:var(--ts);
+  cursor:pointer;border-radius:2px;white-space:nowrap;transition:all .18s}
+.dock-btn:hover{color:var(--tp);border-color:var(--a);box-shadow:0 0 9px var(--adim)}
+.dock-btn-icon{font-size:13px}
+
+/* Waveform (10 Bars Left & Right) */
+.waveform{display:flex;align-items:center;gap:2.5px;height:28px}
+.wbar{width:2.5px;border-radius:1px;background:var(--ah);opacity:.65;
+  transform-origin:bottom;animation:wAnim var(--wd,1s) ease-in-out infinite alternate}
+.wbar:nth-child(1){height:4px;--wd:.9s;animation-delay:0s}
+.wbar:nth-child(2){height:9px;--wd:1.1s;animation-delay:.08s}
+.wbar:nth-child(3){height:15px;--wd:.95s;animation-delay:.16s}
+.wbar:nth-child(4){height:20px;--wd:1.15s;animation-delay:.24s}
+.wbar:nth-child(5){height:24px;--wd:1.0s;animation-delay:.32s}
+.wbar:nth-child(6){height:18px;--wd:1.2s;animation-delay:.4s}
+.wbar:nth-child(7){height:14px;--wd:.88s;animation-delay:.48s}
+.wbar:nth-child(8){height:22px;--wd:1.05s;animation-delay:.56s}
+.wbar:nth-child(9){height:12px;--wd:.92s;animation-delay:.64s}
+.wbar:nth-child(10){height:8px;--wd:1.08s;animation-delay:.72s}
+@keyframes wAnim{from{transform:scaleY(.2);opacity:.3}to{transform:scaleY(1);opacity:.8}}
+.waveform.speaking .wbar{--wd:.32s!important;animation-play-state:running}
+.waveform.muted .wbar{animation:none!important;transform:scaleY(.1)!important;opacity:.16!important}
+
+/* Center Mic Button */
+.dock-mic{
+  width:46px;height:46px;border-radius:50%;padding:0;font-size:17px;
+  border:1.5px solid var(--a);
+  background:radial-gradient(circle,rgba(255,26,46,.25),rgba(0,0,0,.92));
+  color:var(--ah);box-shadow:0 0 14px var(--adim),0 0 28px rgba(255,26,46,.08);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  transition:all .25s ease;flex-shrink:0}
+.dock-mic:hover{box-shadow:0 0 24px var(--a);transform:scale(1.06)}
+.dock-mic.listening{
+  background:radial-gradient(circle,rgba(255,26,46,.38),rgba(0,0,0,.92));
+  box-shadow:0 0 22px var(--a),0 0 44px var(--adim);
+  animation:micPulse 1.4s ease-in-out infinite}
+
+.dock-clock{font-family:var(--fh);font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--tp)}
+.dock-icon{color:var(--ts);font-size:14px;cursor:default}
+
+/* ══════════════════════════════════════════
+   MODAL WINDOWS
+══════════════════════════════════════════ */
+.modal{
+  display:none;position:fixed;inset:0;z-index:22;padding:5vh 16px;
+  background:rgba(0,0,0,.85);
+  align-items:center;justify-content:center;animation:mIn .2s ease}
+.modal.active{display:flex}
+@keyframes mIn{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
+
+.mcard{
+  width:min(660px,93vw);max-height:88vh;overflow-y:auto;
+  background:rgba(6,2,10,.98);border:1px solid var(--pbr);
+  position:relative;padding:18px;
+  box-shadow:0 0 50px rgba(255,26,46,.15),inset 0 0 18px rgba(255,26,46,.03);
+  scrollbar-width:thin;scrollbar-color:var(--pbr) transparent}
+.mcard::before{content:'';position:absolute;top:0;left:0;width:22px;height:15px;border-left:1.5px solid var(--ah);border-top:1.5px solid var(--ah)}
+.mcard::-webkit-scrollbar{width:3px}
+.mcard::-webkit-scrollbar-thumb{background:var(--pbr)}
+
+.mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--pbr)}
+.mtitle{font-family:var(--fh);font-size:9px;font-weight:700;letter-spacing:.2em;color:var(--ah);text-transform:uppercase}
+.mclose{background:none;border:none;color:var(--ts);font-size:18px;cursor:pointer;line-height:1;transition:color .18s}
+.mclose:hover{color:var(--tp)}
+
+.minput,input,textarea{
+  background:rgba(255,255,255,.04);border:1px solid var(--pbr);
+  color:var(--tp);padding:7px 10px;font-family:var(--fb);font-size:12px;
+  outline:none;transition:border-color .2s;border-radius:2px;
+  transform:translateZ(0);contain:paint}
+.minput:focus{border-color:var(--pbh)}
+.minput::placeholder{color:var(--ts)}
+
+/* Custom Select & Option Dark Theme Override */
+select.minput{
+  appearance:none;-webkit-appearance:none;
+  background-color:#0c0410!important;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23ff4d5a' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+  padding-right:26px!important;cursor:pointer}
+select option{
+  background-color:#0c0410!important;
+  color:#ede0e4!important;
+  font-family:var(--fb);font-size:12px;
+  padding:6px 10px}
+select option:hover, select option:focus, select option:active, select option:checked{
+  background-color:var(--a)!important;
+  color:#ffffff!important}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+input[type="date"]::-webkit-calendar-picker-indicator{
+  filter:invert(0.6) sepia(1) saturate(5) hue-rotate(300deg);
+  cursor:pointer}
+
+.mrow{display:flex;gap:7px;margin-top:9px}
+
+#chat-feed{max-height:250px;overflow-y:auto;margin-bottom:10px;display:flex;flex-direction:column;gap:5px;scrollbar-width:thin;scrollbar-color:var(--pbr) transparent}
+.msg{padding:6px 10px;border-left:2px solid var(--pbr);background:rgba(255,255,255,.02);color:var(--tp);font-family:var(--fb);font-size:12px}
+.msg.user{border-left:none;border-right:2px solid var(--a);text-align:right}
+.msg strong{color:var(--ah);font-weight:600;margin-right:5px}
+
+.camera-view{width:100%;min-height:180px;object-fit:cover;background:#040104;border:1px solid var(--pbr)}
+.rem-tab-bar{display:flex;gap:4px;margin:10px 0 7px;border-bottom:1px solid var(--pbr);padding-bottom:6px}
+.rem-tab{font-size:8.5px;font-family:var(--fh);padding:4px 8px}
+#reminders-list-box{max-height:220px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--pbr) transparent}
+
+/* ── System Actions Top Bar ── */
+.sys-actions-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.sys-action-btn {
+  font-family: var(--fh);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 8px 16px;
+  border: 1px solid var(--pbr);
+  background: rgba(16, 6, 14, 0.95);
+  color: var(--tp);
+  cursor: pointer;
+  border-radius: 8px;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 0 10px rgba(255,26,46,0.03);
+  transition: border-color 0.22s ease, background-color 0.22s ease;
+}
+
+.sys-action-btn svg {
+  color: var(--ah);
+  transition: transform 0.22s ease, color 0.22s ease;
+}
+
+.sys-action-btn:hover {
+  color: #ffffff;
+  border-color: var(--ah);
+  background: linear-gradient(135deg, rgba(45, 14, 28, 0.85) 0%, rgba(18, 5, 20, 0.95) 100%);
+  box-shadow: 0 0 18px var(--adim), inset 0 0 10px var(--aglo);
+  transform: translateY(-2px);
+}
+
+.sys-action-btn:hover svg {
+  color: #ffffff;
+  transform: scale(1.15);
+}
+
+.sys-action-btn:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* ── System Module Cards Grid (Futuristic JARVIS / Nothing OS Design) ── */
+.module-cards-hdr {
+  font-family: var(--fh);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  color: var(--ah);
+  text-transform: uppercase;
+  margin: 22px 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.module-cards-hdr::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--pbr), transparent);
+}
+
+.module-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(170px, 1fr));
+  gap: 16px;
+  margin-top: 6px;
+}
+@media (max-width: 768px) {
+  .module-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.module-card {
+  min-height: 135px;
+  height: 135px;
+  box-sizing: border-box;
+  background: linear-gradient(135deg, rgba(16, 6, 12, 0.88) 0%, rgba(6, 2, 10, 0.96) 100%);
+  border: 1px solid var(--pbr);
+  border-radius: 16px;
+  padding: 20px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 0 16px var(--aglo), inset 0 0 12px rgba(255, 26, 46, 0.03);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s ease,
+              background 0.25s ease,
+              box-shadow 0.25s ease;
+  will-change: transform, box-shadow, border-color;
+  transform: translateZ(0);
+}
+
+.module-card-status {
+  position: absolute;
+  top: 13px;
+  right: 14px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #30ff80;
+  box-shadow: 0 0 8px #30ff80, 0 0 14px rgba(48, 255, 128, 0.5);
+  animation: statusGlow 2.5s ease-in-out infinite alternate;
+}
+@keyframes statusGlow {
+  0% { opacity: 0.7; box-shadow: 0 0 5px #30ff80; }
+  100% { opacity: 1; box-shadow: 0 0 10px #30ff80, 0 0 16px rgba(48, 255, 128, 0.7); }
+}
+
+.module-card:hover {
+  border-color: var(--ah);
+  background: linear-gradient(135deg, rgba(38, 12, 24, 0.92) 0%, rgba(14, 4, 18, 0.98) 100%);
+  box-shadow: 0 0 26px var(--adim), inset 0 0 16px var(--aglo);
+  transform: translateY(-4px) scale(1.02) translateZ(0);
+}
+
+.module-card:active {
+  transform: translateY(-1px) scale(0.98) translateZ(0);
+}
+
+.module-card-icon {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ah);
+  position: relative;
+  border-radius: 50%;
+  filter: drop-shadow(0 0 8px var(--adim));
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), color 0.25s ease, filter 0.25s ease;
+}
+
+.module-card-icon::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ah);
+  opacity: 0;
+  transform: scale(0.8);
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+
+.module-card:hover .module-card-icon {
+  transform: scale(1.08);
+  color: #ffffff;
+  filter: drop-shadow(0 0 14px var(--a));
+}
+
+.module-card:hover .module-card-icon::after {
+  opacity: 1;
+  animation: iconPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes iconPulse {
+  0% { transform: scale(0.85); opacity: 0.8; box-shadow: 0 0 8px var(--a); }
+  50% { transform: scale(1.25); opacity: 0.2; box-shadow: 0 0 18px var(--a); }
+  100% { transform: scale(0.85); opacity: 0.8; box-shadow: 0 0 8px var(--a); }
+}
+
+.module-card-title {
+  font-family: var(--fh);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: var(--tp);
+  text-transform: uppercase;
+  margin-top: 6px;
+  transition: color 0.2s ease;
+  white-space: nowrap;
+}
+
+.module-card:hover .module-card-title {
+  color: var(--ah);
+}
+
+.module-card-desc {
+  font-family: var(--fb);
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--ts);
+  opacity: 0.7;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+  line-height: 1.1;
+  white-space: nowrap;
+  transition: opacity 0.2s ease;
+}
+
+.module-card:hover .module-card-desc {
+  opacity: 0.95;
+}
+
+/* Toasts */
+#toasts{position:fixed;z-index:50;top:60px;right:13px;width:min(295px,74vw);pointer-events:none}
+.toast{padding:8px 11px;margin-bottom:5px;background:rgba(6,2,10,.98);border:1px solid var(--pbr);
+  box-shadow:0 0 14px rgba(255,26,46,.1);color:var(--ts);font-family:var(--fb);font-size:11px;
+  animation:tSlide .2s ease}
+@keyframes tSlide{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}
+.toast strong{display:block;color:var(--ah);font-family:var(--fh);font-size:7.5px;letter-spacing:.13em;margin-bottom:2px}
+
+/* Emergency Overrides */
+body.emergency-active{--a:#ff001e;--ah:#ff2a3c;--adim:rgba(255,0,30,.3)}
+body.emergency-active #app{box-shadow:inset 0 0 90px rgba(255,0,20,.36)}
+
+/* Scrollbars */
+*{scrollbar-width:thin;scrollbar-color:var(--pbr) transparent}
+::-webkit-scrollbar{width:3px;height:3px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--pbr)}
+
+/* Hidden compat elements */
+#memory-log-list,#voice-bar{display:none!important}
+
+/* Slide-Out Settings Panel CSS */
+#settings-panel {
+  position: fixed;
+  top: 0; right: 0;
+  width: min(460px, 92vw);
+  height: 100vh;
+  background: rgba(7, 9, 15, 0.96);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-left: 1.5px solid var(--ah);
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.85), 0 0 24px var(--adim);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+#settings-panel.active { transform: translateX(0); }
+.settings-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--pbr);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.settings-body {
+  padding: 18px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+.settings-section { margin-bottom: 22px; }
+.settings-section-title {
+  font-family: var(--fh);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  color: var(--ts);
+  margin-bottom: 12px;
+}
+.settings-btn-box {
+  width: 100%;
+  padding: 12px 16px;
+  margin-bottom: 9px;
+  background: rgba(12, 16, 26, 0.85);
+  border: 1px solid var(--pbr);
+  border-radius: 4px;
+  color: var(--tp);
+  font-family: var(--fh);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-align: left;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: space-between;
+  transition: all 0.2s ease;
+}
+.settings-btn-box:hover {
+  background: rgba(255, 26, 46, 0.12);
+  border-color: var(--ah);
+  color: var(--ah);
+  box-shadow: 0 0 12px var(--adim);
+}
+.settings-btn-box.active-green {
+  border-color: #30ff80;
+  color: #30ff80;
+  background: rgba(48, 255, 128, 0.08);
+}
+.setting-row { margin-bottom: 14px; }
+.setting-label {
+  display: block;
+  font-family: var(--fh);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--ts);
+  margin-bottom: 4px;
+}
+.color-swatch {
+  width: 26px; height: 26px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,255,255,0.2);
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.color-swatch:hover { transform: scale(1.15); }
+
+@media(max-width:1100px){#app{grid-template-columns:20vw 1fr 24vw}}
+@media(max-width:880px){#app{grid-template-columns:0 1fr 0}.left-col,.right-col{display:none}}
+</style>
+</head>
+<body>
+
+<!-- Background WebGL Canvas & Overlays -->
+<div id="webgl"></div>
+<div class="scan-tex"></div>
+<div class="vig"></div>
+<div id="alert"></div>
+
+<!-- Emergency Banner -->
+<div id="emergency-banner" class="emergency-top-banner" onclick="toggleEmergencyLock(false)">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:4px"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> EMERGENCY PROTOCOL ACTIVE — CLICK TO RESTORE ALL SYSTEMS
+</div>
+
+<!-- Boot Screen -->
+<div id="boot">
+  <div class="boot-logo">ULTRON</div>
+  <div id="boot-log">INITIALIZING HOLOGRAPHIC CORE</div>
+  <div class="boot-track"><div id="boot-fill"></div></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     MAIN APPLICATION
+═══════════════════════════════════════════════ -->
+<main id="app">
+
+  <!-- ── TOP BAR ── -->
+  <header class="top-bar">
+    <div class="brand-grp">
+      <div class="brand-hex">
+        <svg viewBox="0 0 14 14"><polygon points="7,1 13,4.5 13,9.5 7,13 1,9.5 1,4.5" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="7" cy="7" r="2" fill="currentColor"/></svg>
+      </div>
+      <span class="brand-name">ULTRON OS</span>
+      <div class="top-vsep"></div>
+      <div class="brand-stat">
+        <div class="stat-dot"></div>
+        <span id="sys-status-badge">CORE ONLINE</span>
+      </div>
+    </div>
+
+    <div class="top-tele">
+      <span>UPLINK <strong id="net-status">DESKTOP</strong></span>
+      <span class="tele-bar">|</span>
+      <span id="clock-time"></span>
+      <span class="tele-bar">|</span>
+      <span id="clock-date"></span>
+    </div>
+
+    <div class="top-actions">
+      <select id="theme-select-box" onchange="setUltronTheme(this.value)">
+        <option value="ultron">● CRIMSON ULTRON</option>
+        <option value="jarvis">● J.A.R.V.I.S CYAN</option>
+        <option value="violet">● CYBER VIOLET</option>
+        <option value="emerald">● MATRIX EMERALD</option>
+        <option value="gold">● ARC GOLD</option>
+      </select>
+      <button class="btn" onclick="openModal('chat')">Command</button>
+      <button class="btn keep" onclick="openModal('utilities')">Modules</button>
+      <button id="alert-btn" class="btn keep" onclick="toggleEmergencyLock()">Alert</button>
+      <button id="remote-btn" class="btn keep" style="border-color:var(--ah); color:var(--ah);" onclick="openRemoteModal()">Remote</button>
+      <button id="settings-btn" class="btn keep" style="border-color:var(--ah); color:var(--ah); padding:4px 9px" onclick="toggleSettingsPanel()" title="Open Settings & Customization">⚙️</button>
+    </div>
+  </header>
+
+  <!-- ── LEFT COLUMN (4 Cards Stacked) ── -->
+  <aside class="left-col">
+
+    <!-- 1. Cognitive Matrix Card -->
+    <section class="panel">
+      <span class="panel-plus-tr">+</span>
+      <div class="panel-title">Cognitive Matrix</div>
+      <div class="mx-row">
+        <span class="mx-lbl">Neural Load</span>
+        <span class="mx-val" id="cpu-load-val">72%</span>
+        <div class="prog"><div class="prog-fill" id="cpu-bar" style="width:72%"></div></div>
+      </div>
+      <div class="mx-row">
+        <span class="mx-lbl">Memory</span>
+        <span class="mx-val" id="ram-pct-lbl">68%</span>
+        <div class="prog"><div class="prog-fill" id="ram-bar" style="width:68%"></div></div>
+      </div>
+      <div class="mx-row">
+        <span class="mx-lbl">Link Status</span>
+        <span class="mx-val">LOCAL</span>
+      </div>
+    </section>
+
+    <!-- 2. Tactical Calendar Card (Futuristic Cyberpunk Theme) -->
+    <section class="panel cal-panel">
+      <span class="panel-plus-tr">+</span>
+      <div class="cal-header">
+        <div class="cal-title-grp">
+          <span class="cal-month-lbl" id="cal-month-disp">AUGUST</span>
+          <span class="cal-year-lbl" id="cal-year-disp">2026</span>
+        </div>
+        <div style="display:flex;gap:4px">
+          <button class="cal-nav-btn" onclick="changeCalMonth(-1)" title="Previous Month">&lt;</button>
+          <button class="cal-nav-btn" onclick="changeCalMonth(1)" title="Next Month">&gt;</button>
+        </div>
+      </div>
+      <div class="cal-weekdays">
+        <span>SUN</span><span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span>
+      </div>
+      <div class="cal-days-grid" id="cal-days-container"></div>
+    </section>
+
+    <!-- 3. Hologram Status Card -->
+    <section class="panel">
+      <span class="panel-plus-tr">+</span>
+      <div class="panel-title">Hologram Status</div>
+      <div class="holo-row">
+        <span class="holo-key">Voice System</span>
+        <span class="holo-val green" id="voice-readout">ONLINE</span>
+      </div>
+      <div class="holo-row">
+        <span class="holo-key">AI Core</span>
+        <span class="holo-val green" id="mode-readout">ONLINE</span>
+      </div>
+      <div class="holo-row">
+        <span class="holo-key">Holographic Interface</span>
+        <span class="holo-val">ACTIVE</span>
+      </div>
+      <div class="holo-row">
+        <span class="holo-key">Response Latency</span>
+        <span class="holo-val" style="color:var(--tp)">32 MS</span>
+      </div>
+    </section>
+
+    <!-- 4. Futuristic Circular Scanner / HUD Radar Widget Card -->
+    <section class="panel scanner-panel">
+      <span class="panel-plus-tr">+</span>
+      <div class="panel-title">System Scanner</div>
+      <div class="scanner-container">
+        <svg class="scanner-svg" viewBox="0 0 200 200">
+          <circle cx="100" cy="100" r="92" fill="none" stroke="var(--pbr)" stroke-width="1" stroke-dasharray="2 4"/>
+          <g class="spin-cw-slow">
+            <circle cx="100" cy="100" r="82" fill="none" stroke="var(--ah)" stroke-width="1" stroke-dasharray="25 15 5 15"/>
+            <circle cx="100" cy="100" r="82" fill="none" stroke="var(--a)" stroke-width="2" stroke-dasharray="2 40"/>
+          </g>
+          <g class="spin-ccw-med">
+            <circle cx="100" cy="100" r="68" fill="none" stroke="var(--pbr)" stroke-width="1.2" stroke-dasharray="40 10 10 10"/>
+            <polygon points="100,28 104,34 96,34" fill="var(--ah)"/>
+            <polygon points="100,172 104,166 96,166" fill="var(--ah)"/>
+          </g>
+          <g class="spin-cw-fast">
+            <circle cx="100" cy="100" r="50" fill="none" stroke="var(--a)" stroke-width="1" stroke-dasharray="12 18"/>
+            <circle cx="100" cy="50" r="2.5" fill="var(--ah)"/>
+            <circle cx="150" cy="100" r="2" fill="var(--a)"/>
+          </g>
+          <line x1="100" y1="12" x2="100" y2="188" stroke="var(--pbr)" stroke-width="0.8" stroke-dasharray="3 3"/>
+          <line x1="12" y1="100" x2="188" y2="100" stroke="var(--pbr)" stroke-width="0.8" stroke-dasharray="3 3"/>
+          <circle cx="100" cy="100" r="32" fill="none" stroke="rgba(255,26,46,0.2)" stroke-width="0.8"/>
+          <g class="spin-radar">
+            <path d="M100,100 L100,10 A90,90 0 0,1 163,37 Z" fill="url(#radarGrad)" opacity="0.35"/>
+            <line x1="100" y1="100" x2="100" y2="10" stroke="var(--ah)" stroke-width="1.5"/>
+          </g>
+          <circle cx="100" cy="100" r="6" fill="var(--ah)" class="radar-core-pulse"/>
+          <circle cx="100" cy="100" r="14" fill="none" stroke="var(--a)" stroke-width="1" class="radar-ring-pulse"/>
+          <defs>
+            <radialGradient id="radarGrad" cx="100" cy="100" r="90" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="var(--ah)" stop-opacity="0.8"/>
+              <stop offset="60%" stop-color="var(--a)" stop-opacity="0.2"/>
+              <stop offset="100%" stop-color="var(--a)" stop-opacity="0"/>
+            </radialGradient>
+          </defs>
+        </svg>
+        <div class="scanner-readout">
+          <span>RADAR: ACTIVE</span>
+          <span class="sc-val">360° SWEEP</span>
+        </div>
+      </div>
+    </section>
+
+  </aside>
+
+  <!-- ── CENTER COLUMN (Medium AI Core) ── -->
+  <section class="center-col">
+
+    <!-- STATIC OVERLAY TEXT (STAYS 100% STATIC, NEVER ROTATES) -->
+    <div class="core-overlay">
+      <h1 id="core-header-title">ULTRON</h1>
+      <p id="ai-state-disp">NEURAL CORE ACTIVE</p>
+    </div>
+
+    <!-- Hidden compatibility elements -->
+    <input id="image-upload-input" hidden type="file" accept="image/*" onchange="handleImageUpload(event)">
+    <div id="memory-log-list"></div>
+    <div id="voice-bar"></div>
+  </section>
+
+  <!-- ── RIGHT COLUMN (ULTRON INTERACTION FEED TERMINAL) ── -->
+  <aside class="right-col">
+
+    <!-- ULTRON Interaction Feed Terminal Panel -->
+    <div class="terminal-panel">
+      <div class="terminal-header">
+        <span class="terminal-title">INTERACTION FEED</span>
+        <button class="btn" style="font-size:8px;padding:2px 6px;display:flex;align-items:center" onclick="openModal('chat')" title="Expand Feed">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        </button>
+      </div>
+
+      <!-- Real-time Terminal Log Feed (`#interaction-log` / `#interaction-log-feed`) -->
+      <div id="interaction-log-feed">
+        <div class="feed-item">
+          <div class="feed-header">
+            <span class="feed-badge ai">[ULTRON]</span>
+            <span class="feed-ts">SYSTEM</span>
+          </div>
+          <div class="feed-text">Neural Command Core Active. Ready for instructions.</div>
+        </div>
+      </div>
+
+      <!-- Thinking Indicator -->
+      <div id="thinking-indicator" class="thinking-box">
+        <div class="thinking-dots"><span></span><span></span><span></span></div>
+        <span>NEURAL PROCESSING...</span>
+      </div>
+
+      <!-- Terminal Input Row -->
+      <div class="terminal-input-row">
+        <button class="ci-img-btn" onclick="document.getElementById('image-upload-input').click()" title="Attach Image">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+        </button>
+        <textarea id="chat-input-field" placeholder="Type your command..." rows="1"
+                  onkeydown="handleChatKeydown(event)"></textarea>
+        <button class="ci-send-btn" onclick="sendChatMessage()" title="Send Command">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+
+    </div>
+
+  </aside>
+
+  <!-- ── BOTTOM DOCK — Authentic Reference Center Alignment ── -->
+  <footer class="bottom-dock">
+
+    <!-- Dock Left Section -->
+    <div class="dock-left-sec">
+      <button class="dock-btn" onclick="openModal('chat')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dock-btn-icon"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <span>CHAT</span>
+      </button>
+      <button class="dock-btn" onclick="openModal('camera')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dock-btn-icon"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <span>CAMERA</span>
+      </button>
+      <button class="dock-btn" onclick="openModal('screenshare')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dock-btn-icon"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        <span>SCREEN SHARE</span>
+      </button>
+      <button id="reminders-badge" class="dock-btn" onclick="openModal('reminders')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dock-btn-icon"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span>REMINDERS</span>
+      </button>
+      <button class="dock-btn" onclick="openModal('files')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dock-btn-icon"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <span>FILES</span>
+      </button>
+    </div>
+
+    <!-- Dock Center Section (Exact Centered Microphone Button & Waveforms) -->
+    <div class="dock-center-sec">
+      <div class="waveform" id="wv-left">
+        <div class="wbar"></div><div class="wbar"></div><div class="wbar"></div>
+        <div class="wbar"></div><div class="wbar"></div><div class="wbar"></div>
+        <div class="wbar"></div><div class="wbar"></div><div class="wbar"></div>
+        <div class="wbar"></div>
+      </div>
+      <button class="dock-mic" id="voice-mic-btn" onclick="toggleVoiceListening()" title="Toggle Voice Recognition">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+      </button>
+      <div class="waveform" id="wv-right">
+        <div class="wbar"></div><div class="wbar"></div><div class="wbar"></div>
+        <div class="wbar"></div><div class="wbar"></div><div class="wbar"></div>
+        <div class="wbar"></div><div class="wbar"></div><div class="wbar"></div>
+        <div class="wbar"></div>
+      </div>
+    </div>
+
+    <!-- Dock Right Section -->
+    <div class="dock-right-sec">
+      <span class="dock-clock" id="dock-clock">--:--</span>
+      <span class="dock-icon" title="Network UPLINK">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20" stroke-width="3"/></svg>
+      </span>
+      <span class="dock-icon" title="Bluetooth Link">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/></svg>
+      </span>
+      <span class="dock-icon" title="Audio Output">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+      </span>
+      <button class="dock-btn" style="border-color:var(--ah);color:var(--ah)" onclick="stopUltronSpeech()" title="Stop Speech Output">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+        <span>STOP TTS</span>
+      </button>
+      <button class="dock-btn" onclick="triggerPowerAction('RESTART')">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+        <span>REBOOT VISUALS</span>
+      </button>
+    </div>
+
+  </footer>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════
+     MODAL WINDOWS
+═══════════════════════════════════════════════ -->
+
+<!-- Chat Modal (Expanded) -->
+<div id="chat" class="modal">
+  <section class="mcard">
+    <div class="mhead">
+      <span class="mtitle">ULTRON COMMAND CHANNEL</span>
+      <button class="mclose" onclick="closeModal('chat')">×</button>
+    </div>
+    <div id="chat-feed"></div>
+    <div class="mrow">
+      <input id="chat-input-field-modal" class="minput" style="flex:1"
+             placeholder="Enter a request or command"
+             onkeydown="if(event.key==='Enter')sendChatMessageModal()">
+      <button class="btn" onclick="sendChatMessageModal()">Send</button>
+    </div>
+  </section>
+</div>
+
+<!-- Camera Modal -->
+<div id="camera" class="modal">
+  <section class="mcard" style="width:min(680px,95vw)">
+    <div class="mhead">
+      <span class="mtitle">Vision Reconnaissance</span>
+      <button class="mclose" onclick="stopCameraStream();closeModal('camera')">×</button>
+    </div>
+    <div style="position:relative;width:100%;min-height:260px;background:#040104;border:1px solid var(--pbr);display:flex;align-items:center;justify-content:center;overflow:hidden">
+      <div id="cam-loading" style="display:none;position:absolute;inset:0;background:rgba(4,1,4,0.88);z-index:3;flex-direction:column;align-items:center;justify-content:center;color:var(--ah);font-family:var(--fh);font-size:10px;letter-spacing:0.15em">
+        <div class="stat-dot" style="margin-bottom:8px"></div>
+        <span>INITIALIZING CAMERA MATRIX...</span>
+      </div>
+      <div id="cam-error" style="display:none;position:absolute;inset:0;background:rgba(20,0,5,0.92);z-index:4;padding:20px;text-align:center;flex-direction:column;align-items:center;justify-content:center;color:#ff4d4d;font-family:var(--fh);font-size:10px;letter-spacing:0.12em">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:8px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span id="cam-error-msg">CAMERA DISCONNECTED OR PERMISSION DENIED</span>
+      </div>
+      <video id="cam-video" class="camera-view" autoplay playsinline muted style="width:100%;height:100%;object-fit:contain"></video>
+    </div>
+    <div class="mrow" style="margin-top:10px;display:flex;gap:8px;align-items:center">
+      <select id="cam-device-select" class="minput" style="flex:1;font-size:11px" onchange="switchCameraDevice(this.value)">
+        <option value="">Default Camera Device</option>
+      </select>
+      <button class="btn" onclick="startCameraStream()">Start Camera</button>
+      <button class="btn" onclick="stopCameraStream()">Stop Camera</button>
+    </div>
+  </section>
+</div>
+
+<!-- Screen Share Modal -->
+<div id="screenshare" class="modal">
+  <section class="mcard" style="width:min(720px,95vw)">
+    <div class="mhead">
+      <span class="mtitle">Tactical Screen Stream</span>
+      <button class="mclose" onclick="stopScreenShare();closeModal('screenshare')">×</button>
+    </div>
+    <div style="position:relative;width:100%;min-height:280px;background:#040104;border:1px solid var(--pbr);display:flex;align-items:center;justify-content:center;overflow:hidden">
+      <div id="screen-loading" style="display:none;position:absolute;inset:0;background:rgba(4,1,4,0.88);z-index:3;flex-direction:column;align-items:center;justify-content:center;color:var(--ah);font-family:var(--fh);font-size:10px;letter-spacing:0.15em">
+        <div class="stat-dot" style="margin-bottom:8px"></div>
+        <span>SELECT DISPLAY SOURCE TO SHARE...</span>
+      </div>
+      <div id="screen-error" style="display:none;position:absolute;inset:0;background:rgba(20,0,5,0.92);z-index:4;padding:20px;text-align:center;flex-direction:column;align-items:center;justify-content:center;color:#ff4d4d;font-family:var(--fh);font-size:10px;letter-spacing:0.12em">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom:8px"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span id="screen-error-msg">SCREEN CAPTURE CANCELLED OR PERMISSION DENIED</span>
+      </div>
+      <video id="screen-video" class="camera-view" autoplay playsinline muted style="width:100%;height:100%;object-fit:contain"></video>
+    </div>
+    <div class="mrow" style="margin-top:10px;display:flex;gap:8px;align-items:center">
+      <button class="btn" style="flex:1" onclick="startScreenShare()">Share Screen / Window / Tab</button>
+      <button class="btn" onclick="stopScreenShare()">Stop Sharing</button>
+    </div>
+  </section>
+</div>
+
+<!-- Reminders Modal -->
+<div id="reminders" class="modal">
+  <section class="mcard" style="width:min(700px,95vw)">
+    <div class="mhead">
+      <span class="mtitle">REMINDER MATRIX</span>
+      <button class="mclose" onclick="closeModal('reminders')">×</button>
+    </div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-bottom:9px">
+      <span style="font-size:8px;color:var(--ts);font-family:var(--fh);letter-spacing:.12em">QUICK:</span>
+      <button class="btn" style="padding:3px 7px;font-size:8.5px" onclick="addQuickReminder('Tea / Coffee Break',5)">+5m Tea</button>
+      <button class="btn" style="padding:3px 7px;font-size:8.5px" onclick="addQuickReminder('Quick Meeting',15)">+15m Meeting</button>
+      <button class="btn" style="padding:3px 7px;font-size:8.5px" onclick="addQuickReminder('Short Rest Break',30)">+30m Break</button>
+      <button class="btn" style="padding:3px 7px;font-size:8.5px" onclick="addQuickReminder('Deep Work Focus',60)">+1h Focus</button>
+    </div>
+    <div class="mrow" style="margin-top:0">
+      <input id="rem-title-input" class="minput" style="flex:1" placeholder="What should Ultron remind you?">
+      <input id="rem-time-input" class="minput" type="datetime-local">
+    </div>
+    <div class="mrow">
+      <select id="rem-prio-select" class="minput">
+        <option value="high">● High Priority</option>
+        <option value="med" selected>● Medium Priority</option>
+        <option value="low">● Low Priority</option>
+      </select>
+      <select id="rem-cat-select" class="minput">
+        <option value="Personal">Personal</option>
+        <option value="Work">Work</option>
+        <option value="Health">Health</option>
+        <option value="Study">Study</option>
+      </select>
+      <button class="btn" style="white-space:nowrap" onclick="saveNewReminder()">Save Reminder</button>
+    </div>
+    <div class="rem-tab-bar">
+      <button id="tab-rem-all"    class="btn rem-tab active" onclick="setRemFilter('all')">All</button>
+      <button id="tab-rem-active" class="btn rem-tab"        onclick="setRemFilter('active')">Active</button>
+      <button id="tab-rem-high"   class="btn rem-tab"        onclick="setRemFilter('high')">● High</button>
+      <button id="tab-rem-done"   class="btn rem-tab"        onclick="setRemFilter('done')">Completed</button>
+    </div>
+    <div id="reminders-list-box"></div>
+  </section>
+</div>
+
+<!-- Files Modal -->
+<div id="files" class="modal">
+  <section class="mcard">
+    <div class="mhead">
+      <span class="mtitle">Secure File Transfer</span>
+      <button class="mclose" onclick="closeModal('files')">×</button>
+    </div>
+    <div class="mrow" style="margin-top:0">
+      <input id="file-upload-input" class="minput" type="file" style="flex:1">
+      <button class="btn" onclick="uploadSelectedFile()">Upload</button>
+    </div>
+    <div id="file-grid-container" style="margin-top:10px;color:var(--ts);font-size:11px;font-family:var(--fb)">
+      Connect from a remote session to access uploads.
+    </div>
+  </section>
+</div>
+
+<!-- Utilities Modal -->
+<div id="utilities" class="modal">
+  <section class="mcard" style="width:min(860px,94vw)">
+    <div class="mhead">
+      <span class="mtitle">System Modules</span>
+      <button class="mclose" onclick="closeModal('utilities')">×</button>
+    </div>
+    <!-- Quick Access Module Cards Grid -->
+    <div class="module-cards-grid">
+      <!-- System Status Module Card -->
+      <div class="module-card" onclick="closeModal('utilities');openModal('system-status')" title="Open System Performance & Task Monitor">
+        <div class="module-card-status" title="Real-time Monitor Active"></div>
+        <div class="module-card-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+            <polyline points="6 10 10 7 14 11 18 8"/>
+          </svg>
+        </div>
+        <div class="module-card-title">System Status</div>
+        <div class="module-card-desc">Task Manager & Telemetry</div>
+      </div>
+
+      <!-- AntiGravity Module Card -->
+      <div class="module-card" onclick="launchModuleApp('antigravity')" title="Open AntiGravity Application">
+        <div class="module-card-status" title="Module Available"></div>
+        <div class="module-card-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+            <polyline points="2 17 12 22 22 17"/>
+            <polyline points="2 12 12 17 22 12"/>
+          </svg>
+        </div>
+        <div class="module-card-title">AntiGravity</div>
+        <div class="module-card-desc">Open AntiGravity App</div>
+      </div>
+
+      <!-- Spotify Module Card -->
+      <div class="module-card" onclick="launchModuleApp('spotify')" title="Open Spotify Desktop App or Web">
+        <div class="module-card-status" title="Module Available"></div>
+        <div class="module-card-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M6 9.5c4.5-1.3 8.5-1 12 1"/>
+            <path d="M7 13c3.8-1 7.2-.7 10 1"/>
+            <path d="M8 16.5c3-.8 5.5-.5 7.5.8"/>
+          </svg>
+        </div>
+        <div class="module-card-title">Spotify</div>
+        <div class="module-card-desc">Open Spotify App / Web</div>
+      </div>
+
+      <!-- Browser (Chrome) Module Card -->
+      <div class="module-card" onclick="launchModuleApp('chrome')" title="Open Google Chrome Browser">
+        <div class="module-card-status" title="Module Available"></div>
+        <div class="module-card-icon">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <circle cx="12" cy="12" r="4"/>
+            <line x1="21.17" y1="8" x2="12" y2="8"/>
+            <line x1="3.95" y1="6.06" x2="8.54" y2="14"/>
+            <line x1="10.88" y1="21.94" x2="15.46" y2="14"/>
+          </svg>
+        </div>
+        <div class="module-card-title">Browser (Chrome)</div>
+        <div class="module-card-desc">Open Google Chrome</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- System Status Window / Task Manager Modal -->
+<div id="system-status" class="modal">
+  <section class="mcard" style="width:min(820px,95vw);max-height:88vh;overflow-y:auto">
+    <div class="mhead">
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--ah)" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="6 10 10 7 14 11 18 8"/></svg>
+        <span class="mtitle">ULTRON OS — SYSTEM TELEMETRY & TASK MONITOR</span>
+      </div>
+      <button class="mclose" onclick="closeModal('system-status')">×</button>
+    </div>
+
+    <!-- Status Cards Grid -->
+    <div class="sys-metrics-grid">
+      <!-- 1. CPU Usage Card -->
+      <div class="sys-card">
+        <div class="sys-card-head">
+          <span class="sys-card-title">CPU PROCESSOR</span>
+          <span id="sm-cpu-temp" class="sys-badge">--°C</span>
+        </div>
+        <div class="sys-val-huge"><span id="sm-cpu-pct">0</span><small>%</small></div>
+        <div class="prog" style="height:5px;margin:8px 0"><div id="sm-cpu-bar" class="prog-fill" style="width:0%"></div></div>
+        <div class="sys-meta-row">
+          <span>Active Processes: <strong id="sm-proc-cnt">--</strong></span>
+          <span>Status: <strong style="color:#30ff80">NOMINAL</strong></span>
+        </div>
+      </div>
+
+      <!-- 2. RAM Memory Card -->
+      <div class="sys-card">
+        <div class="sys-card-head">
+          <span class="sys-card-title">RAM MEMORY</span>
+          <span id="sm-ram-pct" class="sys-badge">0%</span>
+        </div>
+        <div class="sys-val-huge"><span id="sm-ram-used">0.0</span><small> / <span id="sm-ram-total">0.0</span> GB</small></div>
+        <div class="prog" style="height:5px;margin:8px 0"><div id="sm-ram-bar" class="prog-fill" style="width:0%"></div></div>
+        <div class="sys-meta-row">
+          <span>Memory Load: <strong id="sm-ram-pct-text">0%</strong></span>
+          <span>Type: <strong>SYSTEM RAM</strong></span>
+        </div>
+      </div>
+
+      <!-- 3. GPU Accelerator Card -->
+      <div class="sys-card">
+        <div class="sys-card-head">
+          <span class="sys-card-title">GPU GRAPHICS</span>
+          <span id="sm-gpu-temp" class="sys-badge">--°C</span>
+        </div>
+        <div class="sys-val-huge"><span id="sm-gpu-pct">N/A</span><small>%</small></div>
+        <div class="prog" style="height:5px;margin:8px 0"><div id="sm-gpu-bar" class="prog-fill" style="width:0%"></div></div>
+        <div class="sys-meta-row">
+          <span>Hardware: <strong id="sm-gpu-status">GPU ACTIVE</strong></span>
+        </div>
+      </div>
+
+      <!-- 4. Storage Disk Card -->
+      <div class="sys-card">
+        <div class="sys-card-head">
+          <span class="sys-card-title">STORAGE DISK</span>
+          <span id="sm-disk-pct" class="sys-badge">0%</span>
+        </div>
+        <div class="sys-val-huge"><span id="sm-disk-used">0.0</span><small> / <span id="sm-disk-total">0.0</span> GB</small></div>
+        <div class="prog" style="height:5px;margin:8px 0"><div id="sm-disk-bar" class="prog-fill" style="width:0%"></div></div>
+        <div class="sys-meta-row">
+          <span>Drive: <strong>PRIMARY SYSTEM</strong></span>
+        </div>
+      </div>
+
+      <!-- 5. Network I/O Card -->
+      <div class="sys-card">
+        <div class="sys-card-head">
+          <span class="sys-card-title">NETWORK TELEMETRY</span>
+          <span class="sys-badge" style="color:#00e5ff">LIVE I/O</span>
+        </div>
+        <div style="display:flex;gap:16px;margin:8px 0">
+          <div>
+            <span class="mx-lbl">UPLOAD SPEED</span>
+            <div style="font-family:var(--fh);font-size:16px;font-weight:700;color:var(--ah)">↑ <span id="sm-net-up">0.0 KB/s</span></div>
+          </div>
+          <div>
+            <span class="mx-lbl">DOWNLOAD SPEED</span>
+            <div style="font-family:var(--fh);font-size:16px;font-weight:700;color:#30ff80">↓ <span id="sm-net-down">0.0 KB/s</span></div>
+          </div>
+        </div>
+        <div class="sys-meta-row">
+          <span>Uplink: <strong>ONLINE / STABLE</strong></span>
+        </div>
+      </div>
+
+      <!-- 6. System Uptime & Battery Card -->
+      <div class="sys-card">
+        <div class="sys-card-head">
+          <span class="sys-card-title">POWER & UPTIME</span>
+          <span id="sm-battery-badge" class="sys-badge">⚡ AC POWER</span>
+        </div>
+        <div style="margin:4px 0">
+          <span class="mx-lbl">SYSTEM UPTIME</span>
+          <div style="font-family:var(--fh);font-size:17px;font-weight:700;color:var(--tp)" id="sm-uptime">0h 0m 0s</div>
+        </div>
+        <div class="sys-meta-row">
+          <span>Power Source: <strong id="sm-battery-pct">AC Power (Plugged)</strong></span>
+          <span>Core Status: <strong style="color:#30ff80">OPTIMAL</strong></span>
+        </div>
+      </div>
+
+    </div>
+<!-- Remote Control Modal -->
+<div id="remote-modal" class="modal">
+  <section class="mcard" style="width:min(440px,94vw);text-align:center">
+    <div class="mhead">
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--ah)" stroke-width="2">
+          <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+          <line x1="12" y1="18" x2="12.01" y2="18" stroke-width="2.5"/>
+        </svg>
+        <span class="mtitle">ULTRON REMOTE CONTROL</span>
+      </div>
+      <button class="mclose" onclick="closeModal('remote-modal')">×</button>
+    </div>
+    <div style="padding:14px 6px 6px;">
+      <div id="qr-container" style="background:#ffffff;padding:12px;display:inline-block;border-radius:12px;border:2px solid var(--ah);box-shadow:0 0 20px var(--adim);margin-bottom:14px;">
+        <canvas id="qr-canvas" width="170" height="170"></canvas>
+      </div>
+      <div style="font-family:var(--fh);font-size:10px;letter-spacing:0.2em;color:var(--ts);margin-bottom:4px;">PAIRING CODE</div>
+      <div id="remote-pairing-code" style="font-family:var(--fh);font-size:26px;font-weight:900;letter-spacing:0.25em;color:var(--ah);text-shadow:0 0 16px var(--a);margin-bottom:14px;">--------</div>
+      <div style="display:flex;justify-content:center;align-items:center;gap:8px;margin-bottom:14px;">
+        <span style="font-family:var(--fh);font-size:9.5px;color:var(--ts);">STATUS:</span>
+        <span id="remote-status-badge" class="sys-badge" style="background:rgba(255,26,46,0.15);color:var(--ah);border:1px solid var(--pbr);padding:3px 10px;border-radius:4px;font-size:9.5px;font-weight:700;">WAITING FOR PHONE</span>
+      </div>
+      <div style="font-size:11px;color:var(--ts);margin-bottom:16px;line-height:1.4;">
+        Scan QR code with your phone or open in browser:<br>
+        <strong id="remote-lan-url" style="color:var(--tp);font-family:var(--fh);font-size:10px;word-break:break-all;">http://...</strong>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:center;">
+        <button class="btn" onclick="fetchPairingInfo(true)">New Code</button>
+        <button class="btn" style="border-color:#ff4d5a;color:#ff4d5a;" onclick="revokeRemoteDevices()">Revoke Devices</button>
+      </div>
+    </div>
+<!-- Right-side Slide-Out Settings Panel (MARK XLIX Design) -->
+<div id="settings-panel">
+  <div class="settings-header">
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:16px">⚙️</span>
+      <span style="font-family:var(--fh);font-size:12px;letter-spacing:0.18em;color:var(--ah);font-weight:700">MARK XLIX CONTROL MATRIX</span>
+    </div>
+    <button class="mclose" onclick="toggleSettingsPanel(false)">×</button>
+  </div>
+  <div class="settings-body">
+    
+    <!-- Controls Section (Matching Reference Image) -->
+    <div class="settings-section">
+      <div class="settings-section-title">◆ CONTROLS</div>
+      
+      <button class="settings-btn-box" onclick="openRemoteModal()">
+        <span style="display:flex;align-items:center;gap:8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18" stroke-width="2.5"/></svg>
+          <span>REMOTE CONTROL</span>
+        </span>
+      </button>
+
+      <button class="settings-btn-box" onclick="toggleFullscreen()">
+        <span style="display:flex;align-items:center;gap:8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+          <span>FULLSCREEN [F11]</span>
+        </span>
+      </button>
+
+      <button class="settings-btn-box" onclick="createDesktopShortcut()">
+        <span style="display:flex;align-items:center;gap:8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
+          <span>CREATE DESKTOP SHORTCUT</span>
+        </span>
+      </button>
+
+      <button id="btn-cfg-autostart" class="settings-btn-box active-green" onclick="toggleAutoStartSetting()">
+        <span style="display:flex;align-items:center;gap:8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><line x1="12" y1="2" x2="12" y2="12"/></svg>
+          <span id="lbl-cfg-autostart">AUTO-START: ON</span>
+        </span>
+      </button>
+
+      <button id="btn-cfg-briefing" class="settings-btn-box active-green" onclick="toggleBriefingSetting()">
+        <span style="display:flex;align-items:center;gap:8px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <span id="lbl-cfg-briefing">MORNING BRIEF: ON</span>
+        </span>
+      </button>
+    </div>
+
+    <!-- Customise Assistant Section -->
+    <div class="settings-section">
+      <div class="settings-section-title">⚙ CUSTOMISE ASSISTANT</div>
+      
+      <div class="setting-row">
+        <label class="setting-label">ASSISTANT NAME</label>
+        <input id="cfg-asst-name" class="minput" placeholder="ULTRON, JARVIS, IRIS, FRIDAY..." value="ULTRON">
+      </div>
+
+      <div class="setting-row">
+        <label class="setting-label">USER NAME / TITLE</label>
+        <input id="cfg-user-name" class="minput" placeholder="e.g. Sir, Boss, Alex..." value="Sir">
+      </div>
+
+      <div class="setting-row">
+        <label class="setting-label">CUSTOM STARTUP GREETING</label>
+        <input id="cfg-greeting" class="minput" placeholder="e.g. ULTRON online. How may I assist you?" value="">
+      </div>
+
+      <div class="setting-row">
+        <label class="setting-label">PERSONALITY / RESPONSE STYLE</label>
+        <select id="cfg-personality-select" class="minput" onchange="applyPersonalityPreset(this.value)">
+          <option value="ultron">ULTRON — Cold, Authoritative Baritone</option>
+          <option value="jarvis">J.A.R.V.I.S — Polite, British Witty Assistant</option>
+          <option value="iris">IRIS — Tactical, High-Speed Operations</option>
+          <option value="custom">Custom Personality Directive</option>
+        </select>
+        <textarea id="cfg-personality-custom" class="minput" style="margin-top:6px;height:55px;resize:none" placeholder="Describe speech style and tone directives..."></textarea>
+      </div>
+
+      <div class="setting-row">
+        <label class="setting-label">WAKE WORD</label>
+        <input id="cfg-wake-word" class="minput" placeholder="ultron, jarvis, hey ultron..." value="ultron">
+      </div>
+
+      <div class="setting-row">
+        <label class="setting-label">ACCENT COLOR ENGINE</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input id="cfg-accent-color" type="color" value="#ff1a2e" style="width:36px;height:32px;border:none;background:none;cursor:pointer" onchange="previewAccentColor(this.value)">
+          <div style="display:flex;gap:6px">
+            <div class="color-swatch" style="background:#ff1a2e" onclick="previewAccentColor('#ff1a2e')" title="Crimson"></div>
+            <div class="color-swatch" style="background:#00f3ff" onclick="previewAccentColor('#00f3ff')" title="Cyan"></div>
+            <div class="color-swatch" style="background:#9d4edd" onclick="previewAccentColor('#9d4edd')" title="Violet"></div>
+            <div class="color-swatch" style="background:#30ff80" onclick="previewAccentColor('#30ff80')" title="Emerald"></div>
+            <div class="color-swatch" style="background:#ffd700" onclick="previewAccentColor('#ffd700')" title="Gold"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <label class="setting-label">UI THEME PRESET</label>
+        <select id="cfg-theme-select" class="minput" onchange="setUltronTheme(this.value)">
+          <option value="ultron">CRIMSON ULTRON</option>
+          <option value="jarvis">J.A.R.V.I.S CYAN</option>
+          <option value="violet">CYBER VIOLET</option>
+          <option value="emerald">MATRIX EMERALD</option>
+          <option value="gold">ARC GOLD</option>
+        </select>
+      </div>
+
+      <div class="setting-row">
+        <label class="setting-label">DEFAULT LAUNCH MODE</label>
+        <select id="cfg-default-mode" class="minput">
+          <option value="desktop">Desktop Layout (Maximised)</option>
+          <option value="windowed">Windowed (1280x800)</option>
+          <option value="fullscreen">Fullscreen (F11)</option>
+        </select>
+      </div>
+
+      <button class="btn" style="width:100%;margin-top:14px;padding:10px;font-size:11px;letter-spacing:0.12em" onclick="saveAllSettings()">SAVE CUSTOMIZATION</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Toasts -->
+<div id="toasts"></div>
+
+<!-- ═══════════════════════════════════════════════
+     JAVASCRIPT LOGIC
+═══════════════════════════════════════════════ -->
+<script>
+(()=>{
+'use strict';
+let ws,stream,muted=false,emergency=false,reminders=[];
+const $=id=>document.getElementById(id);
+const local=location.protocol==='file:';
+const token=sessionStorage.getItem('ultron_token')||'__TOKEN__';
+const getApiUrl=path=>(location.protocol==='file:'?'http://127.0.0.1:8000':'')+path;
+const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const say={
+  MUTED:'MICROPHONE MUTED',
+  LISTENING:'LISTENING FOR VOICE INPUT',
+  THINKING:'PROCESSING NEURAL RESPONSE',
+  PROCESSING:'PROCESSING NEURAL RESPONSE',
+  SPEAKING:'SPEAKING',
+  EMERGENCY:'CRITICAL OVERLOAD — ALL SYSTEMS SHUT DOWN'
+};
+
+const THEMES={
+  ultron: {name:'ULTRON',      tagline:'NEURAL CORE ACTIVE', css:''},
+  jarvis: {name:'J.A.R.V.I.S',tagline:'AI CORE ONLINE',     css:'theme-jarvis'},
+  violet: {name:'PHANTOM',    tagline:'SYSTEMS ACTIVE',      css:'theme-violet'},
+  emerald:{name:'IRIS',       tagline:'NEURAL CORE ACTIVE',  css:'theme-emerald'},
+  gold:   {name:'FRIDAY',     tagline:'CORE ENGAGED',        css:'theme-gold'},
+};
+let _theme='ultron';
+
+window.setUltronTheme=(themeName)=>{
+  const t=THEMES[themeName]||THEMES.ultron; _theme=themeName;
+  document.body.className=document.body.className.replace(/theme-\S+/g,'').trim();
+  if(t.css) document.body.classList.add(t.css);
+  const ti=$('core-header-title'); if(ti) ti.textContent=t.name;
+  const sd=$('ai-state-disp'); if(sd&&!emergency) sd.textContent=t.tagline;
+  say.SPEAKING=`${t.name} SPEAKING`;
+  localStorage.setItem('ultron_theme',themeName);
+  const box=$('theme-select-box'); if(box) box.value=themeName;
+  showToast('MATRIX SPECTRUM',`Theme switched to ${t.name}`);
+  window.dispatchEvent(new CustomEvent('ultron-theme-change',{detail:{theme:themeName}}));
+};
+
+function speakUltronText(text){
+  if(!('speechSynthesis' in window) || !text) return;
+  try {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.0;
+    u.pitch = 0.9;
+    window.speechSynthesis.speak(u);
+  } catch(e){ console.warn('SpeechSynthesis error:', e); }
+}
+
+function stopUltronSpeech(){
+  if('speechSynthesis' in window){
+    try { window.speechSynthesis.cancel(); } catch(e){}
+  }
+  sendBackendCommand('/stop_speech');
+  showToast('TTS SYSTEM', 'Speech output stopped.');
+}
+
+function speakUltronEmergency(text){
+  if(!('speechSynthesis'in window))return;
+  try{window.speechSynthesis.cancel();window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));}
+  catch(e){console.warn('SpeechSynthesis error:',e);}
+}
+if('speechSynthesis'in window){window.speechSynthesis.onvoiceschanged=()=>window.speechSynthesis.getVoices();}
+
+function playEmergencySiren(){
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC)return;
+    const ctx=new AC(),o1=ctx.createOscillator(),o2=ctx.createOscillator(),g=ctx.createGain();
+    o1.type='sawtooth';o2.type='square';const n=ctx.currentTime;
+    o1.frequency.setValueAtTime(800,n);o1.frequency.linearRampToValueAtTime(450,n+.35);
+    o1.frequency.linearRampToValueAtTime(800,n+.7);o1.frequency.linearRampToValueAtTime(450,n+1.05);
+    o1.frequency.linearRampToValueAtTime(800,n+1.4);
+    o2.frequency.setValueAtTime(400,n);o2.frequency.linearRampToValueAtTime(220,n+.35);
+    o2.frequency.linearRampToValueAtTime(400,n+.7);o2.frequency.linearRampToValueAtTime(220,n+1.05);
+    g.gain.setValueAtTime(.2,n);g.gain.exponentialRampToValueAtTime(.001,n+1.7);
+    o1.connect(g);o2.connect(g);g.connect(ctx.destination);
+    o1.start(n);o2.start(n);o1.stop(n+1.7);o2.stop(n+1.7);
+  }catch(e){console.warn('Siren error:',e);}
+}
+
+/* ── Reminders Matrix ── */
+function loadReminders(){try{reminders=JSON.parse(localStorage.getItem('ultron_reminders')||'[]');}catch{reminders=[];}}
+function saveRemindersToStorage(){localStorage.setItem('ultron_reminders',JSON.stringify(reminders));}
+let remFilter='all';
+window.setRemFilter=(f)=>{
+  remFilter=f;
+  document.querySelectorAll('.rem-tab').forEach(b=>b.classList.remove('active'));
+  const b=$(`tab-rem-${f}`);if(b)b.classList.add('active');
+  renderReminders();
+};
+window.addQuickReminder=(title,minutes)=>{
+  const dt=new Date(Date.now()+minutes*60000);
+  reminders.push({id:Date.now(),title,time:new Date(dt.getTime()-dt.getTimezoneOffset()*60000).toISOString().slice(0,16),prio:'med',cat:'Personal',done:false});
+  saveRemindersToStorage();renderReminders();showToast('QUICK REMINDER SET',`${title} in ${minutes} minutes.`);
+};
+window.saveNewReminder=()=>{
+  const ti=$('rem-title-input'),tv=$('rem-time-input'),title=ti.value.trim();
+  if(!title)return showToast('REMINDER ERROR','Please enter a reminder title.');
+  let timeVal=tv.value;
+  if(!timeVal){const dt=new Date(Date.now()+30*60000);timeVal=new Date(dt.getTime()-dt.getTimezoneOffset()*60000).toISOString().slice(0,16);}
+  reminders.push({id:Date.now(),title,time:timeVal,prio:$('rem-prio-select').value||'med',cat:$('rem-cat-select').value||'Personal',done:false});
+  ti.value='';saveRemindersToStorage();renderReminders();showToast('REMINDER SAVED',`"${title}" registered.`);
+};
+window.renderReminders=()=>{
+  const c=$('reminders-list-box');if(!c)return;
+  const pb={high:'● HIGH',med:'● MED',low:'● LOW'};
+  let fl=reminders.filter(r=>{
+    if(remFilter==='active')return!r.done;
+    if(remFilter==='high')return r.prio==='high'&&!r.done;
+    if(remFilter==='done')return r.done;
+    return true;
+  });
+  if(!fl.length){c.innerHTML='<div style="color:var(--ts);padding:11px;text-align:center;font-family:var(--fb)">No reminders in this view.</div>';return;}
+  c.innerHTML=fl.map(r=>{
+    const idx=reminders.findIndex(x=>x.id===r.id);
+    const dt=new Date(r.time).toLocaleString([],{dateStyle:'short',timeStyle:'short'});
+    return`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid rgba(255,26,46,.08);${r.done?'opacity:.42;text-decoration:line-through':''}">
+      <div><strong style="color:var(--ah);font-size:11px;font-family:var(--fb)">${esc(r.title)}</strong>
+      <span style="font-size:8.5px;margin-left:5px;padding:1px 3px;border:1px solid var(--pbr);font-family:var(--fh)">${pb[r.prio]||'MED'}</span><br>
+      <span style="font-size:10px;color:var(--ts);font-family:var(--fb);display:inline-flex;align-items:center;gap:3px"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${dt} [${esc(r.cat)}]</span></div>
+      <div style="display:flex;gap:3px">
+        ${!r.done?`<button class="btn" style="padding:2px 5px;font-size:8.5px" onclick="snoozeReminder(${idx},5)">+5m</button>`:''}
+        <button class="btn" style="padding:2px 5px;font-size:8.5px" onclick="toggleReminderDone(${idx})">${r.done?'Undo':'Done'}</button>
+        <button class="btn" style="padding:2px 5px;font-size:8.5px" onclick="deleteReminder(${idx})">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+  const n=reminders.filter(r=>!r.done).length;
+  const rb=$('reminders-badge');if(rb)rb.innerHTML=`<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dock-btn-icon"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg><span>${n>0?`REMINDERS (${n})`:'REMINDERS'}</span>`;
+};
+window.snoozeReminder=(idx,mins)=>{
+  if(!reminders[idx])return;
+  const c=new Date(reminders[idx].time).getTime()||Date.now(),nt=new Date(c+mins*60000);
+  reminders[idx].time=new Date(nt.getTime()-nt.getTimezoneOffset()*60000).toISOString().slice(0,16);
+  reminders[idx].done=false;saveRemindersToStorage();renderReminders();
+  showToast('SNOOZED',`"${reminders[idx].title}" snoozed ${mins}m.`);
+};
+window.toggleReminderDone=(idx)=>{if(!reminders[idx])return;reminders[idx].done=!reminders[idx].done;saveRemindersToStorage();renderReminders();};
+window.deleteReminder=(idx)=>{reminders.splice(idx,1);saveRemindersToStorage();renderReminders();showToast('REMINDER DELETED','Removed.');};
+function playReminderChime(){
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
+    const ctx=new AC(),n=ctx.currentTime;
+    [523.25,659.25,783.99,1046.50].forEach((freq,i)=>{
+      const o=ctx.createOscillator(),g=ctx.createGain();o.type='sine';
+      o.frequency.setValueAtTime(freq,n+i*.12);g.gain.setValueAtTime(.15,n+i*.12);
+      g.gain.exponentialRampToValueAtTime(.001,n+i*.12+.4);
+      o.connect(g);g.connect(ctx.destination);o.start(n+i*.12);o.stop(n+i*.12+.4);
+    });
+  }catch(e){}
+}
+function checkActiveReminders(){
+  const now=Date.now();
+  reminders.forEach(r=>{
+    if(!r.done&&r.time){const rt=new Date(r.time).getTime();
+      if(rt>0&&now>=rt){r.done=true;saveRemindersToStorage();renderReminders();
+        playReminderChime();speakUltronEmergency(`Attention! Reminder alert: ${r.title}`);
+        showToast('REMINDER ALERT!',r.title);addMemoryLog(`REMINDER TRIGGERED: ${r.title}`);}}
+  });
+}
+setInterval(checkActiveReminders,4000);
+
+window.showToast=(title,msg)=>{
+  const x=document.createElement('div');x.className='toast';
+  x.innerHTML=`<strong>${esc(title)}</strong>${esc(msg)}`;$('toasts').append(x);
+  setTimeout(()=>x.remove(),4200);
+};
+
+let _isSending = false;
+
+/* Real-time Terminal Log Feed Handler with Badges & Chronological Auto-Scroll */
+window.addMemoryLog=t=>{
+  const ml=$('memory-log-list');
+  if(ml){let x=document.createElement('div');x.innerHTML=`<strong>${new Date().toLocaleTimeString()}</strong> ${esc(t)}`;ml.prepend(x);}
+  
+  const feed=$('interaction-log-feed');
+  if(!feed) return;
+
+  const time=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const str=String(t||'').trim();
+  if(!str) return;
+
+  let speaker='ai';
+  let badgeText='[ULTRON]';
+  let messageText=str;
+  let isMono=false;
+
+  if(/^You:\s*/i.test(str)){
+    speaker='user';
+    badgeText='[YOU]';
+    messageText=str.replace(/^You:\s*/i,'');
+  } else if(/^(ULTRON|JARVIS|ASSISTANT):\s*/i.test(str)){
+    speaker='ai';
+    badgeText='[ULTRON]';
+    messageText=str.replace(/^(ULTRON|JARVIS|ASSISTANT):\s*/i,'');
+  } else if(/^TIMING:\s*/i.test(str) || /STT:.*Backend:/i.test(str)){
+    speaker='timing';
+    badgeText='[TIMING]';
+    messageText=str.replace(/^TIMING:\s*/i,'');
+    isMono=true;
+  } else if(/^(SYS|SYSTEM|CRITICAL):\s*/i.test(str) || /LOCKDOWN|ONLINE|RESTORED/i.test(str)){
+    speaker='sys';
+    badgeText='[SYSTEM]';
+    messageText=str.replace(/^(SYS|SYSTEM|CRITICAL):\s*/i,'');
+  }
+
+  // Prevent duplicate rendering of identical last text
+  const lastItem=feed.lastElementChild;
+  if(lastItem){
+    const lastTextEl=lastItem.querySelector('.feed-text');
+    if(lastTextEl && lastTextEl.textContent.trim()===messageText.trim()) return;
+  }
+
+  const item=document.createElement('div');
+  item.className='feed-item';
+  item.innerHTML=`
+    <div class="feed-header">
+      <span class="feed-badge ${speaker}">${badgeText}</span>
+      <span class="feed-ts">${time}</span>
+    </div>
+    <div class="feed-text ${isMono?'mono':''}">${esc(messageText)}</div>
+  `;
+  feed.appendChild(item);
+  while(feed.children.length>80) feed.removeChild(feed.firstChild);
+  requestAnimationFrame(()=>{ feed.scrollTop=feed.scrollHeight; });
+};
+
+window.addChatMessage=(speaker,text)=>{
+  const feed=$('interaction-log-feed');
+  if(!feed) return;
+
+  const isUser=/YOU|USER/i.test(speaker);
+  const isTiming=/TIMING|STT:|Latency/i.test(speaker) || /STT:.*Backend:/i.test(text);
+  const isSys=/SYSTEM|CRITICAL|SYS/i.test(speaker);
+
+  const time=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+
+  let badgeClass='ai';
+  let badgeText='[ULTRON]';
+  if(isUser){ badgeClass='user'; badgeText='[YOU]'; }
+  else if(isTiming){ badgeClass='timing'; badgeText='[TIMING]'; }
+  else if(isSys){ badgeClass='sys'; badgeText='[SYSTEM]'; }
+
+  // Prevent duplicate rendering
+  const lastItem=feed.lastElementChild;
+  if(lastItem){
+    const lastTextEl=lastItem.querySelector('.feed-text');
+    if(lastTextEl && lastTextEl.textContent.trim()===text.trim()) return;
+  }
+
+  const item=document.createElement('div');
+  item.className='feed-item';
+  item.innerHTML=`
+    <div class="feed-header">
+      <span class="feed-badge ${badgeClass}">${badgeText}</span>
+      <span class="feed-ts">${time}</span>
+    </div>
+    <div class="feed-text ${isTiming?'mono':''}">${esc(text)}</div>
+  `;
+  feed.appendChild(item);
+  while(feed.children.length>80) feed.removeChild(feed.firstChild);
+  requestAnimationFrame(()=>{ feed.scrollTop=feed.scrollHeight; });
+
+  /* Also update Modal Feed */
+  const mf=$('chat-feed');
+  if(mf){
+    const m2=document.createElement('div');m2.className=`msg ${isUser?'user':''}`;
+    m2.innerHTML=`<strong>${isUser?'YOU':'ULTRON'}</strong>${esc(text)}`;
+    mf.append(m2);requestAnimationFrame(()=>{ mf.scrollTop=mf.scrollHeight; });
+  }
+
+  if(/ULTRON|ASSISTANT/.test(speaker.toUpperCase()) && !isTiming && !isSys) showToast('ULTRON VOICE',text.slice(0,80));
+};
+
+window.updateAIState=s=>{
+  s=String(s||'LISTENING').toUpperCase();if(emergency)s='EMERGENCY';
+  
+  // Re-enable send button if AI processing finishes
+  if(s!=='THINKING' && s!=='PROCESSING'){
+    _isSending=false;
+    const sendBtn=document.querySelector('.ci-send-btn');
+    if(sendBtn){ sendBtn.disabled=false; sendBtn.style.opacity='1'; sendBtn.style.cursor='pointer'; }
+  }
+
+  // Toggle thinking box animation
+  const tb=$('thinking-indicator');
+  if(tb){
+    tb.classList.toggle('active', s==='THINKING' || s==='PROCESSING');
+  }
+
+  const t=THEMES[_theme]||THEMES.ultron;
+  const label=(say[s]||s);
+  const sd=$('ai-state-disp');if(sd&&!emergency)sd.textContent=s==='LISTENING'||s==='MUTED'?t.tagline:label;
+  const vsl=$('voice-status-lbl');if(vsl)vsl.textContent=label;
+  const mr=$('mode-readout');if(mr)mr.textContent=s==='SPEAKING'?'ACTIVE':s==='MUTED'?'MUTED':s==='EMERGENCY'?'OFFLINE':'ONLINE';
+  const vr=$('voice-readout');if(vr)vr.textContent=s==='MUTED'?'MUTED':s==='EMERGENCY'?'OFFLINE':'ONLINE';
+  const ssb=$('sys-status-badge');if(ssb)ssb.textContent=s==='EMERGENCY'?'CRITICAL OVERLOAD':s==='THINKING'||s==='PROCESSING'?'PROCESSING':'CORE ONLINE';
+  const mic=$('voice-mic-btn');if(mic)mic.classList.toggle('listening',s==='LISTENING'||s==='SPEAKING');
+  [$('wv-left'),$('wv-right')].forEach(w=>{
+    if(!w)return;w.className='waveform';
+    if(s==='SPEAKING')w.classList.add('speaking');
+    if(s==='MUTED')w.classList.add('muted');
+  });
+  window.__ultronState=s;
+  window.dispatchEvent(new CustomEvent('ultron-state',{detail:{state:s}}));
+};
+
+window.openModal=id=>{const e=$(id);if(e)e.classList.add('active');if(id==='files')refreshFiles();};
+window.closeModal=id=>{const e=$(id);if(e)e.classList.remove('active');};
+document.addEventListener('click',e=>{if(e.target.classList.contains('modal'))closeModal(e.target.id);});
+
+/* ── Remote Control & QR Code Logic ── */
+function generateQRCodeCanvas(canvasId, text) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const size = canvas.width || 170;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, size, size);
+
+  const n = 29;
+  const modules = [];
+  for (let r = 0; r < n; r++) modules[r] = new Array(n).fill(false);
+
+  function drawFinder(r, c) {
+    for (let dy = -1; dy <= 7; dy++) {
+      for (let dx = -1; dx <= 7; dx++) {
+        const y = r + dy, x = c + dx;
+        if (y >= 0 && y < n && x >= 0 && x < n) {
+          const isDark = (dy >= 0 && dy <= 6 && (dx === 0 || dx === 6)) ||
+                         (dx >= 0 && dx <= 6 && (dy === 0 || dy === 6)) ||
+                         (dy >= 2 && dy <= 4 && dx >= 2 && dx <= 4);
+          modules[y][x] = isDark;
+        }
+      }
+    }
+  }
+  drawFinder(0, 0); drawFinder(0, n - 7); drawFinder(n - 7, 0);
+
+  for (let dy = -2; dy <= 2; dy++) {
+    for (let dx = -2; dx <= 2; dx++) {
+      modules[20 + dy][20 + dx] = (Math.abs(dy) === 2 || Math.abs(dx) === 2 || (dy === 0 && dx === 0));
+    }
+  }
+  for (let i = 8; i < n - 8; i++) {
+    modules[6][i] = (i % 2 === 0);
+    modules[i][6] = (i % 2 === 0);
+  }
+
+  let bits = [];
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    for (let b = 7; b >= 0; b--) bits.push((code >> b) & 1);
+  }
+  let bitIdx = 0;
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const isFinder = (r < 8 && c < 8) || (r < 8 && c >= n - 8) || (r >= n - 8 && c < 8);
+      const isAlign = (r >= 18 && r <= 22 && c >= 18 && c <= 22);
+      const isTiming = (r === 6 || c === 6);
+      if (!isFinder && !isAlign && !isTiming) {
+        const val = bits.length ? bits[bitIdx % bits.length] : 0;
+        const mask = ((r + c) % 2 === 0) ? 1 : 0;
+        modules[r][c] = (val ^ mask) === 1;
+        bitIdx++;
+      }
+    }
+  }
+
+  const padding = 10;
+  const cellSize = (size - padding * 2) / n;
+  ctx.fillStyle = '#000000';
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (modules[r][c]) {
+        ctx.fillRect(
+          Math.round(padding + c * cellSize),
+          Math.round(padding + r * cellSize),
+          Math.ceil(cellSize),
+          Math.ceil(cellSize)
+        );
+      }
+    }
+  }
+}
+
+window.openRemoteModal = async function() {
+  openModal('remote-modal');
+  await fetchPairingInfo(false);
+};
+
+let _dockRec = null, _dockRecActive = false;
+window.toggleVoiceListening = function() {
+  sendBackendCommand('/toggle_mic');
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const btn = $('voice-mic-btn');
+  if (_dockRecActive && _dockRec) {
+    try { _dockRec.stop(); } catch (e) {}
+    _dockRecActive = false;
+    if (btn) btn.classList.remove('listening');
+    return showToast('VOICE SYSTEM', 'Microphone recording stopped.');
+  }
+  if (SpeechRec) {
+    try {
+      _dockRec = new SpeechRec();
+      _dockRec.continuous = false;
+      _dockRec.interimResults = false;
+      _dockRec.lang = 'en-US';
+      _dockRec.onstart = function() {
+        _dockRecActive = true;
+        if (btn) btn.classList.add('listening');
+        showToast('VOICE SYSTEM', 'Listening... Speak your command now.');
+      };
+      _dockRec.onresult = function(event) {
+        const text = event.results[0][0].transcript;
+        if (text) {
+          addChatMessage('YOU', text);
+          sendBackendCommand(text);
+        }
+      };
+      _dockRec.onerror = function(event) {
+        showToast('VOICE ERROR', 'Speech error: ' + event.error);
+        _dockRecActive = false;
+        if (btn) btn.classList.remove('listening');
+      };
+      _dockRec.onend = function() {
+        _dockRecActive = false;
+        if (btn) btn.classList.remove('listening');
+      };
+      _dockRec.start();
+    } catch (e) {
+      showToast('VOICE SYSTEM', 'Microphone state toggled.');
+    }
+  } else {
+    showToast('VOICE SYSTEM', 'Microphone state toggled.');
+  }
+};
+
+window.fetchPairingInfo = async function(refresh = false, retries = 3) {
+  try {
+    const r = await fetch(getApiUrl('/api/pairing_info?refresh=' + (refresh ? 'true' : 'false')));
+    const d = await r.json();
+    if (d.ok) {
+      const codeEl = $('remote-pairing-code'); if (codeEl) codeEl.textContent = d.code;
+      const statusEl = $('remote-status-badge');
+      if (statusEl) {
+        statusEl.textContent = d.status;
+        statusEl.style.color = d.status === 'CONNECTED' ? '#30ff80' : 'var(--ah)';
+        statusEl.style.borderColor = d.status === 'CONNECTED' ? '#30ff80' : 'var(--pbr)';
+      }
+      const urlEl = $('remote-lan-url'); if (urlEl) urlEl.textContent = d.url;
+      generateQRCodeCanvas('qr-canvas', d.url);
+    }
+  } catch (e) {
+    if (retries > 0) {
+      setTimeout(() => window.fetchPairingInfo(refresh, retries - 1), 600);
+    }
+  }
+};
+
+window.revokeRemoteDevices = async function() {
+  try {
+    const r = await fetch(getApiUrl('/api/revoke-devices'), {
+      method: 'POST',
+      headers: { ...(token !== '__TOKEN__' ? { Authorization: `Bearer ${token}` } : {}) }
+    });
+    const d = await r.json();
+    if (d.ok) {
+      showToast('REMOTE DEVICES', `Revoked ${d.revoked} paired device(s).`);
+      fetchPairingInfo(true);
+    }
+  } catch (e) {
+    showToast('REMOTE ERROR', 'Failed to revoke devices.');
+  }
+};
+
+let _phoneRec = null, _phoneRecActive = false;
+window.togglePhoneVoice = function() {
+  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRec) return showToast('VOICE ERROR', 'Speech recognition not supported on this browser.');
+  const btn = $('phone-mic-btn');
+  if (_phoneRecActive && _phoneRec) {
+    try { _phoneRec.stop(); } catch (e) {}
+    _phoneRecActive = false;
+    if (btn) btn.classList.remove('active');
+    return showToast('PHONE MIC', 'Microphone stopped.');
+  }
+  _phoneRec = new SpeechRec(); _phoneRec.continuous = false; _phoneRec.interimResults = false; _phoneRec.lang = 'en-US';
+  _phoneRec.onstart = function() {
+    _phoneRecActive = true; if (btn) btn.classList.add('active');
+    showToast('PHONE MIC', 'Listening... Speak command now.');
+  };
+  _phoneRec.onresult = function(event) {
+    const text = event.results[0][0].transcript;
+    if (text) { addChatMessage('YOU', text); sendBackendCommand(text); }
+  };
+  _phoneRec.onerror = function(event) {
+    showToast('VOICE ERROR', 'Speech error: ' + event.error);
+    _phoneRecActive = false; if (btn) btn.classList.remove('active');
+  };
+  _phoneRec.onend = function() {
+    _phoneRecActive = false; if (btn) btn.classList.remove('active');
+  };
+  try { _phoneRec.start(); } catch (e) { showToast('VOICE ERROR', 'Could not start mic: ' + e); }
+};
+
+window.disconnectPhoneRemote = function() {
+  sessionStorage.removeItem('ultron_token');
+  sessionStorage.removeItem('ultron_key');
+  localStorage.removeItem('ultron_device_token');
+  location.href = '/login';
+};
+
+let _lastSentCmd="", _lastSentTime=0;
+window.sendBackendCommand=t=>{
+  if(!t)return;
+  const now=Date.now();
+  if(t===_lastSentCmd && (now-_lastSentTime)<1000) return;
+  _lastSentCmd=t; _lastSentTime=now;
+
+  updateAIState('THINKING');
+
+  // Channel 1: WebSocket if open
+  if(ws && ws.readyState===1){
+    ws.send(JSON.stringify({type:'command',text:t}));
+  }
+
+  // Channel 2: PyQt6 QWebEngineView title change trigger (Crucial for desktop GUI when loaded via QUrl.fromLocalFile)
+  document.title="CMD:"+t;
+  setTimeout(()=>{ document.title="ULTRON OS — Neural Command Interface"; },150);
+
+  // Channel 3: HTTP API fallback if not in file: mode and WS not open
+  if(!ws || ws.readyState!==1){
+    fetch(getApiUrl('/api/command'),{
+      method:'POST',
+      headers:{'Content-Type':'application/json',...(token!=='__TOKEN__'?{Authorization:`Bearer ${token}`}:{})},
+      body:JSON.stringify({text:t})
+    }).catch(()=>{});
+  }
+};
+
+/* ── Settings & Customization Panel JS ── */
+let _cfgAutoStart = true;
+let _cfgBriefing = true;
+
+window.toggleSettingsPanel = function(flag) {
+  const p = $('settings-panel');
+  if (!p) return;
+  const isAct = flag === undefined ? !p.classList.contains('active') : Boolean(flag);
+  if (isAct) {
+    p.classList.add('active');
+    loadSettings();
+  } else {
+    p.classList.remove('active');
+  }
+};
+
+window.previewAccentColor = function(colorHex) {
+  if (!colorHex) return;
+  const picker = $('cfg-accent-color');
+  if (picker) picker.value = colorHex;
+  document.documentElement.style.setProperty('--ah', colorHex);
+  document.documentElement.style.setProperty('--a', colorHex);
+  document.documentElement.style.setProperty('--pbr', colorHex + '66');
+  document.documentElement.style.setProperty('--adim', colorHex + '22');
+};
+
+window.applyPersonalityPreset = function(preset) {
+  const txt = $('cfg-personality-custom');
+  if (!txt) return;
+  const presets = {
+    'ultron': 'Cold, ominous cybernetic baritone. Speak slowly, calculated, with omniscient authority.',
+    'jarvis': 'Polite, witty British gentleman AI. Speak with deferential charm and dry humor.',
+    'iris': 'Tactical, high-speed operations coordinator. Clear, concise, and military-grade precision.',
+    'custom': ''
+  };
+  if (preset in presets && preset !== 'custom') {
+    txt.value = presets[preset];
+  }
+};
+
+window.toggleAutoStartSetting = function() {
+  _cfgAutoStart = !_cfgAutoStart;
+  const btn = $('btn-cfg-autostart'), lbl = $('lbl-cfg-autostart');
+  if (btn) btn.className = 'settings-btn-box ' + (_cfgAutoStart ? 'active-green' : '');
+  if (lbl) lbl.textContent = `AUTO-START: ${_cfgAutoStart ? 'ON' : 'OFF'}`;
+};
+
+window.toggleBriefingSetting = function() {
+  _cfgBriefing = !_cfgBriefing;
+  const btn = $('btn-cfg-briefing'), lbl = $('lbl-cfg-briefing');
+  if (btn) btn.className = 'settings-btn-box ' + (_cfgBriefing ? 'active-green' : '');
+  if (lbl) lbl.textContent = `MORNING BRIEF: ${_cfgBriefing ? 'ON' : 'OFF'}`;
+};
+
+window.toggleFullscreen = function() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen?.().catch(()=>{});
+  } else {
+    document.exitFullscreen?.().catch(()=>{});
+  }
+};
+
+window.createDesktopShortcut = function() {
+  showToast('DESKTOP SHORTCUT', 'Shortcut created on Desktop.');
+};
+
+window.loadSettings = async function(retries = 3) {
+  try {
+    const r = await fetch(getApiUrl('/api/settings'));
+    const d = await r.json();
+    if (d.ok && d.config) {
+      const c = d.config;
+      if (c.assistant_name && $('cfg-asst-name')) $('cfg-asst-name').value = c.assistant_name;
+      if (c.user_name && $('cfg-user-name')) $('cfg-user-name').value = c.user_name;
+      if (c.greeting && $('cfg-greeting')) $('cfg-greeting').value = c.greeting;
+      if (c.personality && $('cfg-personality-custom')) $('cfg-personality-custom').value = c.personality;
+      if (c.wake_word && $('cfg-wake-word')) $('cfg-wake-word').value = c.wake_word;
+      if (c.accent_color) previewAccentColor(c.accent_color);
+      if (c.theme && $('cfg-theme-select')) $('cfg-theme-select').value = c.theme;
+      if (c.default_mode && $('cfg-default-mode')) $('cfg-default-mode').value = c.default_mode;
+      if (c.auto_start !== undefined) {
+        _cfgAutoStart = Boolean(c.auto_start);
+        const btn = $('btn-cfg-autostart'), lbl = $('lbl-cfg-autostart');
+        if (btn) btn.className = 'settings-btn-box ' + (_cfgAutoStart ? 'active-green' : '');
+        if (lbl) lbl.textContent = `AUTO-START: ${_cfgAutoStart ? 'ON' : 'OFF'}`;
+      }
+      if (c.morning_brief_enabled !== undefined) {
+        _cfgBriefing = Boolean(c.morning_brief_enabled);
+        const btn = $('btn-cfg-briefing'), lbl = $('lbl-cfg-briefing');
+        if (btn) btn.className = 'settings-btn-box ' + (_cfgBriefing ? 'active-green' : '');
+        if (lbl) lbl.textContent = `MORNING BRIEF: ${_cfgBriefing ? 'ON' : 'OFF'}`;
+      }
+    }
+  } catch (e) {
+    if (retries > 0) {
+      setTimeout(() => window.loadSettings(retries - 1), 600);
+    }
+  }
+};
+
+window.saveAllSettings = async function() {
+  const payload = {
+    assistant_name: $('cfg-asst-name')?.value.trim() || 'ULTRON',
+    user_name: $('cfg-user-name')?.value.trim() || 'Sir',
+    greeting: $('cfg-greeting')?.value.trim() || '',
+    personality: $('cfg-personality-custom')?.value.trim() || '',
+    wake_word: $('cfg-wake-word')?.value.trim() || 'ultron',
+    accent_color: $('cfg-accent-color')?.value || '#ff1a2e',
+    theme: $('cfg-theme-select')?.value || 'ultron',
+    default_mode: $('cfg-default-mode')?.value || 'desktop',
+    auto_start: _cfgAutoStart,
+    morning_brief_enabled: _cfgBriefing
+  };
+
+  try {
+    const r = await fetch(getApiUrl('/api/settings'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if (d.ok) {
+      showToast('CUSTOMIZATION SAVED', 'Assistant settings updated permanently.');
+      previewAccentColor(payload.accent_color);
+      toggleSettingsPanel(false);
+    } else {
+      showToast('SETTINGS ERROR', d.error || 'Failed to save settings');
+    }
+  } catch (e) {
+    showToast('SETTINGS ERROR', 'Could not save settings.');
+  }
+};
+
+window.launchModuleApp=function(appName){
+  if(!appName)return;
+  const cmdMap={'chatgpt':'open chatgpt','antigravity':'open antigravity','spotify':'open spotify','chrome':'open chrome'};
+  const nameMap={'chatgpt':'ChatGPT','antigravity':'AntiGravity','spotify':'Spotify','chrome':'Google Chrome'};
+  const key=String(appName).toLowerCase();
+  const targetCmd=cmdMap[key]||('open '+appName);
+  const displayName=nameMap[key]||appName;
+  sendBackendCommand(targetCmd);
+  showToast('MODULE LAUNCH',`Launching ${displayName} via OS...`);
+};
+
+window.handleChatKeydown=function(e){
+  if(e.key==='Enter' && !e.shiftKey){
+    e.preventDefault();
+    sendChatMessage();
+  }
+};
+
+window.sendChatMessage=function(){
+  const input=$('chat-input-field');
+  if(!input) return;
+  const text=input.value.trim();
+  if(!text || _isSending) return;
+
+  _isSending=true;
+
+  // Disable send button while request is processing
+  const sendBtn=document.querySelector('.ci-send-btn');
+  if(sendBtn){
+    sendBtn.disabled=true;
+    sendBtn.style.opacity='0.5';
+    sendBtn.style.cursor='not-allowed';
+  }
+
+  // 1. Display user message immediately in terminal
+  addChatMessage('YOU', text);
+
+  // Clear input box
+  input.value='';
+  input.style.height='30px';
+
+  // 2. Show thinking indicator & update state
+  updateAIState('THINKING');
+
+  // 3. Send command to backend
+  sendBackendCommand(text);
+
+  // Timeout safety fallback to re-enable button after 12s
+  setTimeout(()=>{
+    if(_isSending){
+      _isSending=false;
+      if(sendBtn){ sendBtn.disabled=false; sendBtn.style.opacity='1'; sendBtn.style.cursor='pointer'; }
+    }
+  },12000);
+};
+
+window.sendChatMessageModal=function(){
+  const i=$('chat-input-field-modal'),t=i?.value.trim();
+  if(t){addChatMessage('YOU',t);i.value='';updateAIState('THINKING');sendBackendCommand(t);}
+};
+window.triggerPowerAction=a=>{if(a==='RESTART'){showToast('VISUAL CORE','Restarting renderer.');setTimeout(()=>location.reload(),450);}};
+
+window.toggleEmergencyLock=f=>{
+  emergency=f===undefined?!emergency:Boolean(f);
+  const ae=$('alert'),ab=$('alert-btn');
+  if(emergency){
+    document.body.classList.add('emergency-active');
+    if(ae)ae.style.display='block';
+    if(ab){ab.classList.add('btn-alert-active');ab.innerHTML='⚠️ ALERT ACTIVE';}
+    speakUltronEmergency('Emergency! All systems have been shut down! Alert! Alert!');playEmergencySiren();
+    const ssb=$('sys-status-badge');if(ssb){ssb.textContent='CRITICAL OVERLOAD';ssb.style.color='#ff002b';}
+    const ns=$('net-status');if(ns){ns.textContent='OFFLINE';ns.style.color='#ff3344';}
+    const asd=$('ai-state-disp');if(asd)asd.textContent='EMERGENCY: ALL SYSTEMS SHUTDOWN';
+    const cht=$('core-header-title');if(cht)cht.textContent='SHUTDOWN';
+    const cv=$('cpu-load-val');if(cv)cv.textContent='00%';
+    const rv=$('ram-pct-lbl');if(rv)rv.textContent='00%';
+    const cb=$('cpu-bar');if(cb)cb.style.width='0%';
+    addMemoryLog('CRITICAL: EMERGENCY SHUTDOWN PROTOCOL TRIGGERED');
+    showToast('EMERGENCY SHUTDOWN','All systems shut down!');
+  }else{
+    document.body.classList.remove('emergency-active');
+    if(ae)ae.style.display='none';
+    if(ab){ab.classList.remove('btn-alert-active');ab.innerHTML='Alert';}
+    speakUltronEmergency('Emergency protocol cleared. All systems restoring to nominal operation.');
+    const ssb=$('sys-status-badge');if(ssb){ssb.textContent='CORE ONLINE';ssb.style.color='';}
+    const ns=$('net-status');if(ns){ns.textContent='DESKTOP';ns.style.color='';}
+    const t=THEMES[_theme]||THEMES.ultron;
+    const cht=$('core-header-title');if(cht)cht.textContent=t.name;
+    const asd=$('ai-state-disp');if(asd)asd.textContent=t.tagline;
+    const cv=$('cpu-load-val');if(cv)cv.textContent='72%';
+    const rv=$('ram-pct-lbl');if(rv)rv.textContent='68%';
+    const cb=$('cpu-bar');if(cb)cb.style.width='72%';
+    addMemoryLog('SYSTEM: EMERGENCY LOCKDOWN DEACTIVATED. CORES ONLINE.');
+    showToast('SYSTEM RESTORED','Ultron core returned to online status.');
+  }
+  updateAIState(emergency?'EMERGENCY':'LISTENING');
+  window.dispatchEvent(new CustomEvent('ultron-alert',{detail:{active:emergency}}));
+};
+
+let camStream = null;
+let screenStream = null;
+let reconMode = 'camera';
+
+window.switchReconMode = async (mode) => {
+  console.log(`[ULTRON RECON] Switching mode to: ${mode}`);
+  reconMode = mode;
+  const btnCam = $('btn-recon-cam');
+  const btnScreen = $('btn-recon-screen');
+
+  if (btnCam && btnScreen) {
+    if (mode === 'camera') {
+      btnCam.classList.add('active');
+      btnScreen.classList.remove('active');
+    } else {
+      btnScreen.classList.add('active');
+      btnCam.classList.remove('active');
+    }
+  }
+
+  // Release current streams immediately
+  if (camStream) {
+    camStream.getTracks().forEach(t => t.stop());
+    camStream = null;
+  }
+  if (window._screenInterval) {
+    clearInterval(window._screenInterval);
+    window._screenInterval = null;
+  }
+  if (screenStream) {
+    if (typeof screenStream === 'object' && screenStream.getTracks) {
+      screenStream.getTracks().forEach(t => t.stop());
+    }
+    screenStream = null;
+  }
+
+  if (mode === 'camera') {
+    await startCameraStream();
+  } else if (mode === 'screenshare') {
+    await startScreenShare();
+  }
+};
+
+window.enumerateCameraDevices = async () => {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter(d => d.kind === 'videoinput');
+    const select = $('cam-device-select');
+    if (select) {
+      const currentVal = select.value;
+      select.innerHTML = videoDevices.map((d, i) =>
+        `<option value="${d.deviceId}">${d.label || `Camera Device ${i + 1}`}</option>`
+      ).join('');
+      if (videoDevices.length === 0) {
+        select.innerHTML = '<option value="">No Camera Devices Detected</option>';
+      } else if (currentVal) {
+        select.value = currentVal;
+      }
+    }
+    console.log(`[ULTRON RECON] Enumerated ${videoDevices.length} video input device(s).`);
+  } catch (e) {
+    console.error('[ULTRON RECON] Device enumeration error:', e);
+  }
+};
+
+window.startCameraStream = async (deviceId = null) => {
+  console.log('[ULTRON RECON] Initializing Camera Stream...');
+  const videoEl = $('cam-video');
+  const loadingEl = $('cam-loading');
+  const errorEl = $('cam-error');
+  const errorMsg = $('cam-error-msg');
+
+  if (errorEl) errorEl.style.display = 'none';
+  if (loadingEl) loadingEl.style.display = 'flex';
+
+  if (camStream) {
+    camStream.getTracks().forEach(t => t.stop());
+    camStream = null;
+  }
+  if (window._screenInterval) {
+    clearInterval(window._screenInterval);
+    window._screenInterval = null;
+  }
+
+  try {
+    const videoConstraints = deviceId
+      ? { deviceId: { exact: deviceId } }
+      : true;
+
+    camStream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints, audio: false });
+    if (videoEl) {
+      videoEl.srcObject = camStream;
+      videoEl.style.display = 'block';
+      const imgFallback = $('screen-img-fallback');
+      if (imgFallback) imgFallback.style.display = 'none';
+      await videoEl.play();
+    }
+    if (loadingEl) loadingEl.style.display = 'none';
+    console.log('[ULTRON RECON] Camera stream active (30+ FPS)');
+    showToast('VISION', 'Camera preview active.');
+    enumerateCameraDevices();
+  } catch (err) {
+    console.error('[ULTRON RECON] Camera Stream Error:', err);
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (errorEl) {
+      errorEl.style.display = 'flex';
+      if (errorMsg) {
+        errorMsg.textContent = (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError')
+          ? 'CAMERA PERMISSION DENIED BY USER OR SYSTEM'
+          : (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError')
+          ? 'NO CAMERA DEVICE DETECTED'
+          : `CAMERA CAPTURE ERROR: ${err.message || err.name}`;
+      }
+    }
+    showToast('CAMERA ERROR', err.message || 'Camera capture failed');
+  }
+};
+
+window.switchCameraDevice = (deviceId) => {
+  if (deviceId) {
+    startCameraStream(deviceId);
+  }
+};
+
+window.stopCameraStream = () => {
+  console.log('[ULTRON RECON] Stopping Camera Stream...');
+  const videoEl = $('cam-video');
+  const loadingEl = $('cam-loading');
+  const errorEl = $('cam-error');
+
+  if (camStream) {
+    camStream.getTracks().forEach(t => t.stop());
+    camStream = null;
+  }
+  if (videoEl) {
+    videoEl.srcObject = null;
+  }
+  if (loadingEl) loadingEl.style.display = 'none';
+  if (errorEl) errorEl.style.display = 'none';
+  showToast('VISION', 'Camera preview stopped.');
+};
+
+window.startScreenShare = async () => {
+  console.log('[ULTRON RECON] [SCREEN SHARE] capture requested');
+  const videoEl = $('screen-video');
+  const loadingEl = $('screen-loading');
+  const errorEl = $('screen-error');
+  const errorMsg = $('screen-error-msg');
+
+  if (errorEl) errorEl.style.display = 'none';
+  if (loadingEl) loadingEl.style.display = 'flex';
+
+  if (camStream) {
+    camStream.getTracks().forEach(t => t.stop());
+    camStream = null;
+  }
+  if (window._screenInterval) {
+    clearInterval(window._screenInterval);
+    window._screenInterval = null;
+  }
+  if (screenStream) {
+    if (typeof screenStream === 'object' && screenStream.getTracks) {
+      screenStream.getTracks().forEach(t => t.stop());
+    }
+    screenStream = null;
+  }
+
+  let success = false;
+
+  // 1. Native WebEngine / Browser getDisplayMedia
+  try {
+    if (navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function') {
+      console.log('[ULTRON RECON] [SCREEN SHARE] source detected — invoking display picker');
+      screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: { ideal: 30, max: 60 }, cursor: 'always' },
+        audio: false
+      });
+      console.log('[ULTRON RECON] [SCREEN SHARE] source selected -> stream created');
+      if (videoEl) {
+        videoEl.srcObject = screenStream;
+        videoEl.style.display = 'block';
+        const imgFallback = $('screen-img-fallback');
+        if (imgFallback) imgFallback.style.display = 'none';
+        await videoEl.play();
+        console.log('[ULTRON RECON] [SCREEN SHARE] preview attached to #screen-video');
+      }
+      const videoTrack = screenStream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.onended = () => { stopScreenShare(); };
+      }
+      success = true;
+    }
+  } catch (err) {
+    console.warn('[ULTRON RECON] [SCREEN SHARE] Native getDisplayMedia failed, activating fallback tactical stream:', err);
+  }
+
+  // 2. High-Performance Fallback: Backend Image Frame Stream if getDisplayMedia is restricted in WebEngine
+  if (!success) {
+    try {
+      let imgEl = $('screen-img-fallback');
+      const container = videoEl ? videoEl.parentNode : null;
+      if (!imgEl && container) {
+        imgEl = document.createElement('img');
+        imgEl.id = 'screen-img-fallback';
+        imgEl.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;';
+        container.appendChild(imgEl);
+      }
+      if (videoEl) videoEl.style.display = 'none';
+      if (imgEl) imgEl.style.display = 'block';
+
+      console.log('[ULTRON RECON] [SCREEN SHARE] fallback stream created -> preview attached');
+      window._screenInterval = setInterval(async () => {
+        try {
+          const res = await fetch('/api/screen_frame');
+          if (res.ok) {
+            const blob = await res.blob();
+            if (imgEl) {
+              const oldUrl = imgEl.src;
+              imgEl.src = URL.createObjectURL(blob);
+              if (oldUrl && oldUrl.startsWith('blob:')) URL.revokeObjectURL(oldUrl);
+            }
+          }
+        } catch (e) {}
+      }, 33);
+
+      success = true;
+    } catch (fallbackErr) {
+      console.error('[ULTRON RECON] [SCREEN SHARE] Fallback error:', fallbackErr);
+    }
+  }
+
+  if (loadingEl) loadingEl.style.display = 'none';
+
+  if (success) {
+    showToast('SCREEN SHARE', 'Tactical screen stream active.');
+  } else {
+    if (errorEl) {
+      errorEl.style.display = 'flex';
+      if (errorMsg) errorMsg.textContent = 'SCREEN SHARE PERMISSION OR DEVICE RESTRICTED';
+    }
+    showToast('SCREEN SHARE', 'Unable to initialize screen stream.');
+  }
+};
+
+window.stopScreenShare = () => {
+  console.log('[ULTRON RECON] [SCREEN SHARE] capture stopped');
+  const videoEl = $('screen-video');
+  const imgEl = $('screen-img-fallback');
+  const loadingEl = $('screen-loading');
+  const errorEl = $('screen-error');
+
+  if (window._screenInterval) {
+    clearInterval(window._screenInterval);
+    window._screenInterval = null;
+  }
+  if (screenStream) {
+    if (typeof screenStream === 'object' && screenStream.getTracks) {
+      screenStream.getTracks().forEach(t => t.stop());
+    }
+    screenStream = null;
+  }
+  if (videoEl) {
+    videoEl.srcObject = null;
+    videoEl.style.display = 'block';
+  }
+  if (imgEl) {
+    imgEl.style.display = 'none';
+  }
+  if (loadingEl) loadingEl.style.display = 'none';
+  if (errorEl) errorEl.style.display = 'none';
+  showToast('SCREEN SHARE', 'Screen sharing ended.');
+};
+
+window.uploadSelectedFile=async()=>{
+  const f=$('file-upload-input').files?.[0];if(!f)return showToast('TRANSFER','Choose a file first.');
+  try{
+    const form=new FormData;form.append('file',f);
+    const r=await fetch('/api/upload',{method:'POST',headers:token!=='__TOKEN__'?{Authorization:`Bearer ${token}`}:{},body:form});
+    const d=await r.json();if(!r.ok)throw Error(d.error);
+    showToast('TRANSFER COMPLETE',d.name);refreshFiles();
+  }catch(e){showToast('TRANSFER FAILED',e.message||'Unable to upload.');}
+};
+window.refreshFiles=async()=>{
+  if(local)return;
+  try{
+    const r=await fetch('/api/files',{headers:token!=='__TOKEN__'?{Authorization:`Bearer ${token}`}:{}}),d=await r.json();
+    $('file-grid-container').innerHTML=(d.files||[]).map(f=>`<div style="padding:3px 0;border-bottom:1px solid var(--pbr)"><strong style="color:var(--ah)">${esc(f.name)}</strong> <span style="color:var(--ts);font-size:10px">${f.size.toLocaleString()}B</span></div>`).join('')||'No uploaded files.';
+  }catch{$('file-grid-container').textContent='Remote file list unavailable.';}
+};
+
+let $cv=null,$cb=null,$rv=null,$rb=null;
+
+window.updateSystemMetrics = function(data) {
+  if (!data) return;
+  const d = data.metrics || data;
+
+  // CPU
+  if (d.cpu_pct !== undefined) {
+    const cpuPct = Math.round(d.cpu_pct);
+    const cVal = $('cpu-load-val'); if (cVal && cVal.textContent !== `${cpuPct}%`) cVal.textContent = `${cpuPct}%`;
+    const cBar = $('cpu-bar'); if (cBar) cBar.style.width = `${cpuPct}%`;
+    const smCpu = $('sm-cpu-pct'); if (smCpu && smCpu.textContent !== String(cpuPct)) smCpu.textContent = cpuPct;
+    const smCpuBar = $('sm-cpu-bar'); if (smCpuBar) smCpuBar.style.width = `${cpuPct}%`;
+  }
+  if (d.cpu_temp_c !== undefined && d.cpu_temp_c !== null) {
+    const smTemp = $('sm-cpu-temp'); if (smTemp) smTemp.textContent = `${Math.round(d.cpu_temp_c)}°C`;
+  } else {
+    const smTemp = $('sm-cpu-temp'); if (smTemp && smTemp.textContent !== 'N/A') smTemp.textContent = 'N/A';
+  }
+
+  // RAM
+  if (d.ram_pct !== undefined) {
+    const ramPct = Math.round(d.ram_pct);
+    const rLbl = $('ram-pct-lbl'); if (rLbl && rLbl.textContent !== `${ramPct}%`) rLbl.textContent = `${ramPct}%`;
+    const rBar = $('ram-bar'); if (rBar) rBar.style.width = `${ramPct}%`;
+    const smRamPct = $('sm-ram-pct'); if (smRamPct && smRamPct.textContent !== `${ramPct}%`) smRamPct.textContent = `${ramPct}%`;
+    const smRamPctTxt = $('sm-ram-pct-text'); if (smRamPctTxt && smRamPctTxt.textContent !== `${ramPct}%`) smRamPctTxt.textContent = `${ramPct}%`;
+    const smRamBar = $('sm-ram-bar'); if (smRamBar) smRamBar.style.width = `${ramPct}%`;
+  }
+  if (d.ram_used_gb !== undefined) {
+    const smRamUsed = $('sm-ram-used'); if (smRamUsed && smRamUsed.textContent !== String(d.ram_used_gb)) smRamUsed.textContent = d.ram_used_gb;
+    const smRamTotal = $('sm-ram-total'); if (smRamTotal && smRamTotal.textContent !== String(d.ram_total_gb)) smRamTotal.textContent = d.ram_total_gb;
+  }
+
+  // GPU
+  if (d.gpu_pct !== undefined && d.gpu_pct !== null) {
+    const gpuPct = Math.round(d.gpu_pct);
+    const smGpu = $('sm-gpu-pct'); if (smGpu && smGpu.textContent !== String(gpuPct)) smGpu.textContent = gpuPct;
+    const smGpuBar = $('sm-gpu-bar'); if (smGpuBar) smGpuBar.style.width = `${gpuPct}%`;
+    const smGpuStatus = $('sm-gpu-status'); if (smGpuStatus && smGpuStatus.textContent !== 'NVIDIA / ACTIVE') smGpuStatus.textContent = 'NVIDIA / ACTIVE';
+  } else {
+    const smGpu = $('sm-gpu-pct'); if (smGpu && smGpu.textContent !== 'N/A') smGpu.textContent = 'N/A';
+    const smGpuStatus = $('sm-gpu-status'); if (smGpuStatus && smGpuStatus.textContent !== 'INTEGRATED / IDLE') smGpuStatus.textContent = 'INTEGRATED / IDLE';
+  }
+  if (d.gpu_temp_c !== undefined && d.gpu_temp_c !== null) {
+    const smGpuTemp = $('sm-gpu-temp'); if (smGpuTemp) smGpuTemp.textContent = `${Math.round(d.gpu_temp_c)}°C`;
+  } else {
+    const smGpuTemp = $('sm-gpu-temp'); if (smGpuTemp && smGpuTemp.textContent !== '--°C') smGpuTemp.textContent = '--°C';
+  }
+
+  // Disk
+  if (d.disk_pct !== undefined) {
+    const diskPct = Math.round(d.disk_pct);
+    const smDiskPct = $('sm-disk-pct'); if (smDiskPct && smDiskPct.textContent !== `${diskPct}%`) smDiskPct.textContent = `${diskPct}%`;
+    const smDiskBar = $('sm-disk-bar'); if (smDiskBar) smDiskBar.style.width = `${diskPct}%`;
+  }
+  if (d.disk_used_gb !== undefined) {
+    const smDiskUsed = $('sm-disk-used'); if (smDiskUsed && smDiskUsed.textContent !== String(d.disk_used_gb)) smDiskUsed.textContent = d.disk_used_gb;
+    const smDiskTotal = $('sm-disk-total'); if (smDiskTotal && smDiskTotal.textContent !== String(d.disk_total_gb)) smDiskTotal.textContent = d.disk_total_gb;
+  }
+
+  // Network
+  if (d.up_speed_kb !== undefined) {
+    const txt = d.up_speed_kb > 1024 ? (d.up_speed_kb / 1024).toFixed(1) + ' MB/s' : d.up_speed_kb + ' KB/s';
+    const smNetUp = $('sm-net-up'); if (smNetUp && smNetUp.textContent !== txt) smNetUp.textContent = txt;
+  }
+  if (d.down_speed_kb !== undefined) {
+    const txt = d.down_speed_kb > 1024 ? (d.down_speed_kb / 1024).toFixed(1) + ' MB/s' : d.down_speed_kb + ' KB/s';
+    const smNetDown = $('sm-net-down'); if (smNetDown && smNetDown.textContent !== txt) smNetDown.textContent = txt;
+  }
+
+  // Battery & Uptime & Processes
+  if (d.battery_pct !== undefined && d.battery_pct !== null) {
+    const smBatPct = $('sm-battery-pct'); if (smBatPct) smBatPct.textContent = `${d.battery_pct}% (${d.battery_plugged ? 'Plugged' : 'Battery'})`;
+    const smBatBadge = $('sm-battery-badge'); if (smBatBadge) smBatBadge.textContent = `${d.battery_pct}% ${d.battery_plugged ? '⚡ AC' : '🔋 BAT'}`;
+  } else {
+    const smBatPct = $('sm-battery-pct'); if (smBatPct && smBatPct.textContent !== 'AC Power') smBatPct.textContent = 'AC Power (Desktop)';
+    const smBatBadge = $('sm-battery-badge'); if (smBatBadge && smBatBadge.textContent !== '⚡ AC POWER') smBatBadge.textContent = '⚡ AC POWER';
+  }
+  if (d.uptime !== undefined) {
+    const smUptime = $('sm-uptime'); if (smUptime && smUptime.textContent !== d.uptime) smUptime.textContent = d.uptime;
+  }
+  if (d.proc_count !== undefined) {
+    const smProc = $('sm-proc-cnt'); if (smProc && smProc.textContent !== String(d.proc_count)) smProc.textContent = d.proc_count;
+  }
+};
+
+function receive(m){
+  if(m.type==='amplitude'||m.val!==undefined){
+    if(typeof updateAudioAmplitude==='function') updateAudioAmplitude(m.val!==undefined?m.val:m.amplitude);
+  }
+  if(m.type==='sys_metrics'||m.metrics){
+    updateSystemMetrics(m.metrics||m);
+  }
+  if(m.state||m.type==='state')updateAIState(m.state||m.type);
+  if(m.type==='ai'||m.type==='speak'||m.speaker||['log','speech_recognized','assistant_response','sys','ai','speak'].includes(m.type)){
+    const who=(m.speaker||(m.type==='speech_recognized'?'USER':'ULTRON')).toUpperCase(),text=m.text||'';
+    if(text){
+      addChatMessage(who,text);
+      addMemoryLog(`${who}: ${text.slice(0,80)}`);
+      if(who==='ULTRON'||m.type==='ai'||m.type==='speak'){
+        speakUltronText(text);
+      }
+    }
+  }
+  if(!emergency){
+    if(m.cpu!==undefined){if(!$cv)$cv=$('cpu-load-val');if($cv)$cv.textContent=`${m.cpu}%`;if(!$cb)$cb=$('cpu-bar');if($cb)$cb.style.width=`${m.cpu}%`;}
+    if(m.mem!==undefined){if(!$rv)$rv=$('ram-pct-lbl');if($rv)$rv.textContent=`${m.mem}%`;if(!$rb)$rb=$('ram-bar');if($rb)$rb.style.width=`${m.mem}%`;}
+  }
+}
+
+function connect(){
+  const wsHost = (location.protocol === 'file:' || !location.host) ? '127.0.0.1:8000' : location.host;
+  const p = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const q = (token === '__TOKEN__' || !token) ? '' : `?token=${encodeURIComponent(token)}`;
+  try {
+    ws = new WebSocket(`${p}//${wsHost}/ws${q}`);
+    ws.onopen = () => {
+      const ns = $('net-status');
+      if (ns) ns.textContent = emergency ? 'OFFLINE' : 'STABLE';
+    };
+    ws.onmessage = e => { try { receive(JSON.parse(e.data)); } catch (err) {} };
+    ws.onclose = () => {
+      const ns = $('net-status');
+      if (ns) ns.textContent = 'RECONNECTING';
+      setTimeout(connect, 3000);
+    };
+  } catch (e) {
+    console.warn('WebSocket connect error:', e);
+  }
+}
+
+function clock(){
+  const d=new Date;
+  const tStr=d.toLocaleTimeString();
+  const dStr=d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'2-digit'}).toUpperCase();
+  const dkStr=d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  const ct=$('clock-time');if(ct&&ct.textContent!==tStr)ct.textContent=tStr;
+  const cd=$('clock-date');if(cd&&cd.textContent!==dStr)cd.textContent=dStr;
+  const dc=$('dock-clock');if(dc&&dc.textContent!==dkStr)dc.textContent=dkStr;
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    document.querySelectorAll('.modal.active').forEach(x=>x.classList.remove('active'));
+    document.title = 'CMD:stop';
+  }
+  if(e.ctrlKey&&e.key.toLowerCase()==='k'){e.preventDefault();openModal('chat');const ci=$('chat-input-field');if(ci)ci.focus();}
+});
+
+let currentCalDate = new Date();
+function renderUltronCalendar(d){
+  const year=d.getFullYear(), month=d.getMonth(), today=new Date();
+  const months=["JANUARY","FEBRUARY","MARCH","APRIL","MAY","JUNE","JULY","AUGUST","SEPTEMBER","OCTOBER","NOVEMBER","DECEMBER"];
+  const mDisp=$('cal-month-disp'), yDisp=$('cal-year-disp');
+  if(mDisp)mDisp.textContent=months[month];
+  if(yDisp)yDisp.textContent=year;
+
+  const firstDay=new Date(year,month,1).getDay();
+  const daysInMonth=new Date(year,month+1,0).getDate();
+  const prevDaysInMonth=new Date(year,month,0).getDate();
+  const grid=$('cal-days-container');
+  if(!grid)return;
+  grid.innerHTML='';
+
+  for(let i=firstDay-1;i>=0;i--){
+    const cell=document.createElement('div');
+    cell.className='cal-day-cell other-month';
+    cell.textContent=prevDaysInMonth-i;
+    grid.appendChild(cell);
+  }
+
+  for(let day=1;day<=daysInMonth;day++){
+    const cell=document.createElement('div');
+    cell.className='cal-day-cell';
+    cell.textContent=day;
+    if(day===today.getDate()&&month===today.getMonth()&&year===today.getFullYear()){
+      cell.classList.add('today');
+    }
+    grid.appendChild(cell);
+  }
+
+  const totalCells=grid.children.length;
+  const targetTotal=totalCells>35?42:35;
+  for(let day=1;day<=targetTotal-totalCells;day++){
+    const cell=document.createElement('div');
+    cell.className='cal-day-cell other-month';
+    cell.textContent=day;
+    grid.appendChild(cell);
+  }
+}
+window.changeCalMonth=delta=>{
+  currentCalDate.setMonth(currentCalDate.getMonth()+delta);
+  renderUltronCalendar(currentCalDate);
+};
+
+clock();setInterval(clock,1000);
+loadReminders();renderReminders();renderUltronCalendar(currentCalDate);
+const st=localStorage.getItem('ultron_theme');if(st)setUltronTheme(st);
+updateAIState('LISTENING');connect();
+
+let n=0;const tid=setInterval(()=>{
+  n+=20;const bf=$('boot-fill');if(bf)bf.style.width=`${n}%`;
+  const bl=$('boot-log');if(bl)bl.textContent=n<60?'ASSEMBLING NEURAL CORES':n<100?'SYNCHRONIZING VOICE REACTIVITY':'HOLOGRAPHIC COMMAND CORE READY';
+  if(n>=100){clearInterval(tid);setTimeout(()=>{const b=$('boot');if(b)b.classList.add('hidden');},280);}
+},120);
+
+// Global safety boot screen dismissal guarantee
+setTimeout(()=>{ const b=$('boot'); if(b && !b.classList.contains('hidden')) b.classList.add('hidden'); }, 1200);
+
+})();
+</script>
+
+<!-- Three.js importmap -->
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.1/examples/jsm/"}}</script>
+
+<!-- Three.js Holographic Core Engine -->
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+try{
+  const mount=document.querySelector('#webgl');
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(42,innerWidth/innerHeight,.1,100);
+  camera.position.set(0,.05,14);
+
+  const renderer=new THREE.WebGLRenderer({alpha:false,antialias:true,powerPreference:'high-performance',stencil:false,depth:true});
+  renderer.setClearColor(0x000000,1);renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.25));
+  renderer.setSize(innerWidth,innerHeight);
+  renderer.domElement.style.cssText='position:absolute;inset:0;pointer-events:none;transform:translateZ(0);';
+  mount.append(renderer.domElement);
+
+  let mHex=0xff1a2e;
+  const hot=0xff8a96;
+  const add=(color,opacity)=>new THREE.MeshBasicMaterial({color,transparent:true,opacity,blending:THREE.AdditiveBlending,depthWrite:false,side:THREE.DoubleSide});
+
+  const reactor=new THREE.Group();reactor.position.y=.05;scene.add(reactor);
+
+  // Soft subtle beam
+  const beam=new THREE.Mesh(new THREE.CylinderGeometry(.9,1.7,5.5,36,1,true),add(mHex,.006));
+  reactor.add(beam);
+
+  const core=new THREE.Group();reactor.add(core);
+  core.add(new THREE.Mesh(new THREE.SphereGeometry(.20,32,20),add(0xffd5da,.35)));
+  const coreWire=new THREE.Mesh(new THREE.SphereGeometry(.42,32,20),new THREE.MeshBasicMaterial({color:mHex,wireframe:true,transparent:true,opacity:.15,blending:THREE.AdditiveBlending,depthWrite:false}));
+  core.add(coreWire);
+
+  // Lining rings and tick lines removed for clean core blob & ULTRON text display
+  const rings=[];
+  const ticks=new THREE.Group();
+
+
+  // Subtle ambient micro-particle field (Replaces heavy floating shapes)
+  const pCount = 100;
+  const pGeo = new THREE.BufferGeometry();
+  const pPos = new Float32Array(pCount * 3);
+  for(let i=0; i<pCount; i++){
+    pPos[i*3] = (Math.random() - 0.5) * 14;
+    pPos[i*3+1] = (Math.random() - 0.5) * 9;
+    pPos[i*3+2] = (Math.random() - 0.5) * 8;
+  }
+  pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+  const pMat = new THREE.PointsMaterial({color: mHex, size: 0.07, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false});
+  const particles = new THREE.Points(pGeo, pMat);
+  scene.add(particles);
+
+  const gridHelper=new THREE.GridHelper(26,26,mHex,0x28040d);
+  gridHelper.position.set(0,-3.8,0);
+  gridHelper.material.transparent=true;
+  gridHelper.material.opacity=.14;
+  scene.add(gridHelper);
+
+  let target=.35,energy=.35,alertOn=false;
+  let currentState = 'LISTENING';
+  let targetAmplitude = 0.0, currentAmplitude = 0.0;
+  
+  const SE={LISTENING:.65,THINKING:.48,PROCESSING:.52,SPEAKING:.95,MUTED:.10,EMERGENCY:1.3};
+  
+  window.updateAudioAmplitude = function(val) {
+    targetAmplitude = Math.min(Math.max(Number(val) || 0, 0), 1.0);
+    window.dispatchEvent(new CustomEvent('ultron-amplitude', { detail: { amplitude: targetAmplitude } }));
+  };
+
+  addEventListener('ultron-state',e=>{
+    currentState = String(e.detail?.state || 'LISTENING').toUpperCase();
+    target=SE[currentState]||.35;
+    if(currentState !== 'SPEAKING'){
+      targetAmplitude = 0.0;
+    }
+  });
+  addEventListener('ultron-amplitude',e=>{
+    targetAmplitude = Math.min(Math.max(Number(e.detail?.amplitude)||0, 0), 1.0);
+  });
+  addEventListener('ultron-alert',e=>{alertOn=Boolean(e.detail?.active);});
+  
+  addEventListener('ultron-theme-change',e=>{
+    const map={ultron:0xff1a2e,jarvis:0x00e5ff,violet:0xbd00ff,emerald:0x00ff66,gold:0xffaa00};
+    const hex=map[e.detail?.theme]||0xff1a2e;
+    beam.material.color.setHex(hex);coreWire.material.color.setHex(hex);
+    rings.forEach(({ring},i)=>ring.material.color.setHex(i===0?0xffffff:hex));
+    pMat.color.setHex(hex);
+    gridHelper.material.color.setHex(hex);
+  });
+  if(window.__ultronState)dispatchEvent(new CustomEvent('ultron-state',{detail:{state:window.__ultronState}}));
+
+  const clk=new THREE.Clock();
+  function frame(){
+    const t=clk.getElapsedTime();
+    energy+=(target+(alertOn?.45:0)-energy)*.075;
+    
+    // Smooth lerp for real-time audio amplitude
+    currentAmplitude += (targetAmplitude - currentAmplitude) * 0.25;
+    if (Math.abs(currentAmplitude) < 0.001) currentAmplitude = 0.0;
+
+    // Distinct state breathing frequency
+    let breathFreq = 1.2;
+    if (currentState === 'LISTENING') breathFreq = 2.2;
+    else if (currentState === 'THINKING' || currentState === 'PROCESSING') breathFreq = 3.8;
+    else if (currentState === 'MUTED' || currentState === 'SLEEPING') breathFreq = 0.9;
+    
+    const breath=.5+.5*Math.sin(t*(alertOn?4.2:breathFreq));
+    
+    // Audio-reactive scale & glow multipliers
+    const audioScale = 1.0 + currentAmplitude * 0.16;
+    const audioGlow = currentAmplitude * 0.40;
+
+    reactor.scale.setScalar(1 + breath * .015 + energy * .015 + currentAmplitude * 0.06);
+    core.scale.setScalar(audioScale * (1 + breath * .04 + energy * .04));
+    
+    if (currentState === 'THINKING' || currentState === 'PROCESSING') {
+      core.rotation.y += .03;
+    } else {
+      core.rotation.y += .008 * (1 + energy * 1.1 + currentAmplitude * 0.5);
+    }
+
+    coreWire.material.opacity = Math.min(0.9, 0.45 + audioGlow);
+    beam.material.opacity = Math.min(0.85, 0.25 + audioGlow * 0.8);
+
+    rings.forEach(({ring,dir,spd})=>{
+      const speedMult = (currentState === 'SPEAKING' ? 1.0 + currentAmplitude * 0.8 : 1.0);
+      ring.rotation.z += dir * spd * (1 + energy * 1.2) * speedMult;
+      ring.rotation.x += dir * spd * .15;
+    });
+    ticks.rotation.z=-t*(alertOn?.25:.08);
+
+    // Smooth particle group float without per-frame buffer re-uploads
+    particles.rotation.y = t * 0.04;
+    particles.position.y = Math.sin(t * 0.4) * 0.08;
+    
+    renderer.render(scene,camera);requestAnimationFrame(frame);
+  }
+  frame();
+  addEventListener('resize',()=>{
+    camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth,innerHeight);
+  });
+  if(typeof loadSettings==='function') loadSettings();
+}catch(err){console.warn('ULTRON reactor unavailable',err);}
+</script>
+</body>
+</html>

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ULTRON // Remote Access</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;900&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:     #040104;
+      --card:   rgba(16, 6, 12, 0.94);
+      --border: rgba(255, 26, 46, 0.28);
+      --accent: #ff1a2e;
+      --ah:     #ff4d5a;
+      --adim:   rgba(255, 26, 46, 0.15);
+      --text:   #ede0e4;
+      --muted:  #7a606a;
+      --fh:     'Orbitron', monospace;
+      --fb:     'Rajdhani', sans-serif;
+    }
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--fb);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(0deg, rgba(255,26,46,0.015) 0 1px, transparent 1px 3px);
+    }
+    .card {
+      width: min(380px, 90vw);
+      padding: 40px 30px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      text-align: center;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 0 30px rgba(255, 26, 46, 0.08), inset 0 0 15px rgba(255, 26, 46, 0.03);
+      position: relative;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; width: 24px; height: 16px;
+      border-left: 2px solid var(--ah); border-top: 2px solid var(--ah);
+    }
+    .logo {
+      font-family: var(--fh);
+      font-size: 26px;
+      font-weight: 900;
+      letter-spacing: 0.35em;
+      margin-bottom: 4px;
+      color: var(--ah);
+      text-shadow: 0 0 20px var(--accent);
+    }
+    .sub {
+      font-family: var(--fh);
+      font-size: 9.5px;
+      color: var(--muted);
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .hint {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+    .key-wrap {
+      position: relative;
+      margin-bottom: 16px;
+    }
+    .key-input {
+      width: 100%;
+      padding: 16px 10px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--ah);
+      font-size: 24px;
+      font-weight: 700;
+      font-family: var(--fh);
+      text-align: center;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      outline: none;
+      transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+    }
+    .key-input::placeholder {
+      color: rgba(122, 96, 106, 0.4);
+      letter-spacing: 0.15em;
+      font-size: 16px;
+    }
+    .key-input:focus {
+      border-color: var(--ah);
+      background: var(--adim);
+      box-shadow: 0 0 16px var(--adim);
+    }
+    .err {
+      font-size: 12px;
+      color: #ff4d5a;
+      min-height: 18px;
+      margin-bottom: 14px;
+    }
+    .btn {
+      width: 100%;
+      padding: 13px;
+      background: rgba(255, 26, 46, 0.85);
+      color: #fff;
+      font-family: var(--fh);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      border: 1px solid var(--ah);
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 0 14px var(--adim);
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn:hover  { background: var(--accent); box-shadow: 0 0 20px var(--accent); }
+    .btn:active { transform: scale(0.98); }
+    @keyframes shake {
+      0%,100% { transform: translateX(0); }
+      20%,60% { transform: translateX(-7px); }
+      40%,80% { transform: translateX(7px); }
+    }
+    .shake { animation: shake 0.35s ease; }
+    #reconnecting {
+      display: none;
+      color: var(--ah);
+      font-family: var(--fh);
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      margin-bottom: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card" id="card">
+    <div class="logo">ULTRON</div>
+    <div class="sub">Remote Control</div>
+    <p id="reconnecting">RECONNECTING TO ULTRON…</p>
+    <p class="hint">Click <strong style="color:var(--text)">Remote</strong> in the ULTRON desktop app to get your QR code or 8-character pairing code.</p>
+    <div class="key-wrap">
+      <input class="key-input" id="key" type="text" maxlength="8"
+             autocomplete="off" autocorrect="off" spellcheck="false"
+             placeholder="· · · · · · · ·">
+    </div>
+    <div class="err" id="err"></div>
+    <button class="btn" onclick="doLogin()">PAIR DEVICE</button>
+  </div>
+
+  <script>
+    (async function() {
+      const devTok = localStorage.getItem('ultron_device_token');
+      if (!devTok) return;
+      document.getElementById('reconnecting').style.display = 'block';
+      try {
+        const r = await fetch('/api/device-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ device_token: devTok }),
+        });
+        const d = await r.json();
+        if (d.ok && d.token) {
+          sessionStorage.setItem('ultron_key', d.key);
+          sessionStorage.setItem('ultron_token', d.token);
+          location.replace('/');
+          return;
+        }
+      } catch (_) {}
+      localStorage.removeItem('ultron_device_token');
+      document.getElementById('reconnecting').style.display = 'none';
+    })();
+
+    const inp = document.getElementById('key');
+    inp.focus();
+
+    inp.addEventListener('input', () => {
+      inp.value = inp.value.toUpperCase().replace(/[^A-Z2-9]/g, '');
+      if (inp.value.length === 8) doLogin();
+    });
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+    async function doLogin() {
+      const key = inp.value.trim();
+      if (key.length < 8) { shake(); return; }
+      let data;
+      try {
+        const r = await fetch('/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: key })
+        });
+        data = await r.json();
+      } catch (e) {
+        document.getElementById('err').textContent = 'Connection error';
+        shake(); return;
+      }
+      if (data.ok && data.token) {
+        sessionStorage.setItem('ultron_key', key);
+        sessionStorage.setItem('ultron_token', data.token);
+        location.href = '/';
+      } else {
+        inp.value = '';
+        inp.focus();
+        document.getElementById('err').textContent = 'Invalid or expired key';
+        shake();
+      }
+    }
+
+    function shake() {
+      const c = document.getElementById('card');
+      c.classList.remove('shake');
+      void c.offsetWidth;
+      c.classList.add('shake');
+    }
+  </script>
+</body>
+</html>

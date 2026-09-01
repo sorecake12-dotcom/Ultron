@@ -1,0 +1,7 @@
+{
+  "open_app -> youtube_video": 20,
+  "open_app -> spotify_control": 10,
+  "close_app": 20,
+  "open_app -> whatsapp_control": 9,
+  "open_app": 9
+}
